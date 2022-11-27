@@ -9,11 +9,6 @@ RESOURCES_DIR = os.path.join(BASE_DIR, 'resources')
 
 
 class Preprocess:
-    """
-    This module is only for adding the leaks junctions and splitting the pipes
-    Emitter coefficients are according to year zero
-    Changing the emitter coefficients between years is done with the function: change_leaks_coef
-    """
     def __init__(self, inp_path, out_files_dir, out_inp_name):
         self.inp_path = inp_path
         self.out_files_dir = out_files_dir
@@ -49,7 +44,12 @@ class Preprocess:
         self.wn.add_pipe('LeakPipe_'+str(leak_idx), split_node.name, leak_node.name, length=0.1, diameter=pipe.diameter,
                          roughness=pipe.roughness, check_valve=True)
 
-    def add_all_leaks(self, year):
+    def add_all_leaks(self, year=0):
+        """
+            This function is only for adding the leaks junctions and splitting the pipes
+            Emitter coefficients are set according to year zero
+            Changing the emitter coefficients between years is done with the function: change_leaks_coef
+        """
         df = pd.read_csv(os.path.join(RESOURCES_DIR, 'preprocess', 'leaks_preprocess.csv'))
         factor = np.exp(0.25 * year * 52 / 260)
         for i, row in tqdm(df.iterrows(), total=len(df)):
@@ -60,6 +60,12 @@ class Preprocess:
 
 
 def change_leaks_coef(inp_path, year, export_path):
+    """
+    Function for modifying the leaks emitter coefficients between years
+    :param inp_path:        path to input network - network with leaks nodes (str)
+    :param year:            year number where initial network is 0 (int)
+    :param export_path:     path to save modified network (str)
+    """
     leaks_data = pd.read_csv(os.path.join(RESOURCES_DIR, 'preprocess', 'leaks_preprocess.csv'))
     net = wntr.network.WaterNetworkModel(inp_path)
     net_leaks = net.query_node_attribute('emitter_coefficient').dropna()
@@ -76,8 +82,8 @@ def change_leaks_coef(inp_path, year, export_path):
 
 
 if __name__ == '__main__':
-    inp_path = os.path.join(RESOURCES_DIR, 'networks', 'BIWS.inp')
+    base_net = os.path.join(RESOURCES_DIR, 'networks', 'BIWS.inp')
     output_path = os.path.join(RESOURCES_DIR, 'networks')
-    p = Preprocess(inp_path, output_path, 'BIWS_y0.inp')
-    p.add_all_leaks(0)
+    p = Preprocess(base_net, output_path, 'BIWS_y0.inp')
+    p.add_all_leaks()
     p.write_modified_inp()
