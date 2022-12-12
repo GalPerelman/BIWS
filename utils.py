@@ -59,3 +59,31 @@ def normalize_obj(worse, objectives):
     df['normalized'] = np.where(df['normalized'] > 1, 1, df['normalized'])
     df['normalized'] = np.where(df['normalized'].isnull(), df['best'], df['normalized'])
     return df['normalized'].to_dict()
+
+
+def replace_pumps(net, pump_id: str, model: str, v_diameter, v_setting, v_type='PSV'):
+    pump = net.get_link(pump_id)
+    pump.pump_curve_name = model  # replace the pump model - changing pump curve
+
+    if pd.isnull(v_diameter) and pd.isnull(v_setting):  # Case 1 - replace old pump without adding valve
+        pump.tag = "NEW_PUMP"
+        return net
+
+    elif pump.tag == "NEW_PUMP":  # Case 2 - replace new pump and set valve settings
+        valve = net.get_link(net.get_links_for_node(pump.end_node_name)[0])
+        valve.diameter = v_diameter
+        valve.initial_setting = v_setting
+        valve.type = v_type
+
+    else:  # Case 3 - replace old pump and add valve
+        pump.tag = "NEW_PUMP"
+        pump.initial_status = 1
+        dis_node = net.get_node(pump.end_node_name)
+        dis_node_name = dis_node.name
+        net.add_junction(pump_id + '_discharge', elevation=dis_node.elevation, coordinates=dis_node.coordinates)
+        pump.end_node = net.get_node(pump_id + '_discharge')
+
+        net.add_valve(pump_id + '_v', start_node_name=pump_id + '_discharge', end_node_name=dis_node_name,
+                      diameter=v_diameter, valve_type=v_type, initial_setting=v_setting)
+
+    return net
