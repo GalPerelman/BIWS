@@ -5,9 +5,11 @@ from typing import List
 from copy import deepcopy
 import glob
 import wntr
+import warnings
 
 import utils
 
+warnings.filterwarnings(action='ignore', module='wntr')
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
 pd.set_option("display.precision", 8)

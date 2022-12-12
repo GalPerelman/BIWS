@@ -2,7 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 import wntr
+from wntr.network.io import write_inpfile
 import time
+import math
 from tqdm import tqdm
 from copy import deepcopy
 
@@ -43,7 +45,7 @@ class Greedy:
 
     def get_iter_evaluations_and_budget(self):
         n_candidates = len(self.pipes) + len(self.leaks)
-        iter_evaluations = int(self.reevaluate_ratio * n_candidates)
+        iter_evaluations = math.ceil(self.reevaluate_ratio * n_candidates)
         num_iter = self.total_run_time * 3600 / (iter_evaluations * 60)  # 60 sec - estimated single evaluation
         iter_budget = self.budget / num_iter
         return iter_evaluations, iter_budget
@@ -68,7 +70,7 @@ class Greedy:
         all_leaks = deepcopy(leaks)
         leaks['rank'] = leaks['total_water_loss'] / leaks['total_cost']
         leaks.sort_values('rank', inplace=True, ascending=False)
-        leaks = leaks.nlargest(self.n_leaks, 'rank')
+        leaks = leaks.nlargest(self.n_leaks, 'rank')  # Select candidates
         return pipes, leaks, all_leaks
 
     def replace_single_pipe(self, net, pipe_id, diameter_m):
@@ -195,7 +197,7 @@ class Greedy:
             flows = np.abs(evaluator.results_flow).mean().rename('flow')
             pressures = evaluator.results_pressure.mean().rename('pressure')
         except Exception as e:
-            wntr.network.io.write_inpfile(net, os.path.join(self.output_dir, 'debuging.inp'))
+            write_inpfile(net, os.path.join(self.output_dir, 'debuging.inp'))
             print(e)
         return benchmark, flows, pressures
 
@@ -231,13 +233,13 @@ class Greedy:
 
             iter_cost = actions['d_cost'].sum()
             if iter_cost <= self.iter_budget:
-                actions = evaluations[evaluations['d_cost'].cumsum() <= self.iter_budget]
+                actions = evaluations[evaluations['d_cost'].cumsum() <= self.iter_budget].copy()
             if used_budget + actions['d_cost'].sum() > self.budget:
                 actions = actions[actions['d_cost'].cumsum() < self.budget - used_budget]
                 break_flag = True
 
             num_actions = len(actions)
-            actions['iter'] = str(n_iter)
+            actions.loc[:, 'iter'] = str(n_iter)
             results = pd.concat([results, actions], axis=0)
             x_net, cost = self.improve_net(x_net, actions)
             used_budget += cost
@@ -247,7 +249,7 @@ class Greedy:
             updated_obj = self.get_evaluation_flag(x_net, flows)
 
             evaluations.to_csv(os.path.join(self.output_dir, self.net_name + '_' + str(n_iter) + '.csv'))
-            x_net.write_inpfile(os.path.join(self.output_dir, self.net_name + '_' + str(n_iter) + '.inp'))
+            write_inpfile(x_net, os.path.join(self.output_dir, self.net_name + '_' + str(n_iter) + '.inp'))
 
             iter = pd.concat([pd.DataFrame({'time': time.time() - iter_start_time,
                                             'evaluations': num_eval,
@@ -257,9 +259,14 @@ class Greedy:
                               pd.DataFrame(round_obj(updated_obj, 4), index=[0])], axis=1)
 
             iterations = pd.concat([iterations, iter])
-            print(time.time() - iter_start_time, num_eval, num_actions, cost, used_budget, round_obj(updated_obj, 4))
-            evaluations = evaluations[~evaluations.index.isin(actions.index)]
+            print(f"||Iter time: {time.time() - iter_start_time:.1f} seconds",
+                  f"| Iter Evaluations: {num_eval}",
+                  f"| Iter Actions: {num_actions}",
+                  f"| Iter cost: {cost}",
+                  f"| Budget: {used_budget}",
+                  f"| Objectives: {round_obj(updated_obj, 4)}||")
 
+            evaluations = evaluations[~evaluations.index.isin(actions.index)]
             iterations.to_csv(os.path.join(self.output_dir, self.net_name + '_iterations.csv'))
             results.to_csv(os.path.join(self.output_dir, self.net_name + '_actions.csv'))
             with open(os.path.join(self.output_dir, 'run_details.txt'), 'w') as file:
@@ -278,19 +285,3 @@ class Greedy:
 def round_obj(obj, digits):
     return {k: round(v, digits) for k, v in obj.items()}
 
-
-if __name__ == "__main__":
-    output_path = os.path.join(OUTPUT_DIR, time.strftime("%Y%m%d%H%M%S") + '_test')
-    # first_iter_results_path = os.path.join(RESOURCES_DIR, "year1_init")
-    inp = os.path.join(RESOURCES_DIR, "networks", "BIWS_y0.inp")
-    greedy = Greedy(inp,
-                    output_dir=output_path,
-                    budget=50000,
-                    actions_ratio=0.3,
-                    hgl_threshold=0.01,
-                    n_leaks=10,
-                    reevaluate_ratio=0.01,
-                    total_run_time=1,
-                    hours_duration=6)
-
-    greedy.start()
