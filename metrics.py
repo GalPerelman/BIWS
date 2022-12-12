@@ -210,7 +210,7 @@ class Evaluator:
         return i6
 
     def linear_interpolation_i7(self, row):
-        temp = pd.DataFrame(data={'start': row['pressure_ts_start'], 'end': row['pressure_ts_end']})
+        temp = pd.DataFrame(data={'start': row['head_ts_start'], 'end': row['head_ts_end']})
         neg = temp[['start', 'end']].min(axis=1)
         pos = temp[['start', 'end']].max(axis=1)
         temp['interpolate'] = (- neg * row['Length']) / (pos - neg)
@@ -220,8 +220,8 @@ class Evaluator:
 
     def vectorize_interpolatoion(self, pipes_headloss: pd.DataFrame):
         # initiate two dataframes one for start and one for end nodes pressures
-        start_p = pd.DataFrame(pipes_headloss['pressure_ts_start'].to_list(), index=pipes_headloss.index).T
-        end_p = pd.DataFrame(pipes_headloss['pressure_ts_end'].to_list(), index=pipes_headloss.index).T
+        start_p = pd.DataFrame(pipes_headloss['head_ts_start'].to_list(), index=pipes_headloss.index).T
+        end_p = pd.DataFrame(pipes_headloss['head_ts_end'].to_list(), index=pipes_headloss.index).T
 
         # converting the dataframes to high and low pressure in both edges of the pipe
         high = pd.concat([start_p, end_p]).groupby(level=0).max()
@@ -334,7 +334,7 @@ class Evaluator:
         df = pd.concat([df1, df2], axis=1)
         df.columns = ['avg_pressure', 'total_water_loss']
 
-        leaks_data = pd.read_csv(os.path.join(RESOURCES_DIR, "leaks_preprocess.csv"),
+        leaks_data = pd.read_csv(os.path.join(RESOURCES_DIR, "preprocess", "leaks_preprocess.csv"),
                                  usecols=['Link', 'Link_id', 'Coef', 'Leak_id'])
         df = pd.merge(df, leaks_data, left_index=True, right_on="Leak_id")
         df = pd.merge(df, self.pipes_data[['ID', 'Diameter']], left_on='Link', right_on='ID')
@@ -346,14 +346,14 @@ class Evaluator:
         return df
 
     def pipes_headloss_summary(self, year):
-        df_head = self.results_by_year[year].node['pressure'].T
+        df_head = self.results_by_year[year].node['head'].T
 
         head_ts = df_head.apply(lambda x: np.array(x), axis=1)
-        head_ts.name = 'pressure_ts'
+        head_ts.name = 'head_ts'
 
         df = pd.merge(self.pipes_data, head_ts, left_on='Node1', right_index=True)
         df = pd.merge(df, head_ts, left_on='Node2', right_index=True, suffixes=('_start', '_end'))
-        df['headloss_ts'] = df['pressure_ts_end'] - df['pressure_ts_start']
+        df['headloss_ts'] = df['head_ts_end'] - df['head_ts_start']
         df.loc[:, 'mean_head_loss'] = df.apply(lambda x: np.mean(x['headloss_ts']), axis=1)
         df.loc[:, 'min_head_loss'] = df.apply(lambda x: np.min(x['headloss_ts']), axis=1)
         df.loc[:, 'max_head_loss'] = df.apply(lambda x: np.max(x['headloss_ts']), axis=1)
@@ -380,6 +380,14 @@ def evaluate_scenario(path_to_networks):
 
 if __name__ == "__main__":
     # Usage example
-    inp_path = os.path.join(RESOURCES_DIR, 'networks', 'BIWS.inp')
+    inp_path = os.path.join(RESOURCES_DIR, 'networks', 'BIWS_y0.inp')
     wn = wntr.network.WaterNetworkModel(inp_path)
-    print(Evaluator([wn]).evaluate_scenario())
+    # print(Evaluator([wn]).evaluate_scenario())
+
+
+    wn.options.time.duration = 5 * 3600
+    evaluator = Evaluator([wn])
+    evaluator.run_hyd()
+
+
+
