@@ -90,7 +90,7 @@ def change_leaks_coef(inp_path, year, export_path):
     net.write_inpfile(export_path)
 
 
-def iterate_all_pumps_combs(networks_path: str):
+def iterate_all_pumps_combs(networks_path: str, export_path):
     """ A function to evaluate pumps' models combinations
 
     :param networks_path:   path to dir with 6 networks (one for every year)
@@ -107,12 +107,12 @@ def iterate_all_pumps_combs(networks_path: str):
 
     combinations = (list(itertools.product(*models)))
     results = pd.DataFrame()
-    for i, c in enumerate(combinations):
+    for i, c in tqdm(enumerate(combinations), total=len(combinations)):
         indicators = replace_pumps_and_evaluate_solution(networks_path, df.loc[df['pump_model'].isin(c)], path=str(i)+'.inp')
         pumps = df.loc[df['pump_model'].isin(c)]
         pumps = dict(zip(pumps["pump_id"], pumps["model"]))
         results = pd.concat([results, pd.DataFrame.from_dict({**indicators, **pumps}, orient='index').T], axis=0)
-    return results
+        results.to_csv(export_path)
 
 
 def replace_pumps_and_evaluate_solution(networks_path, pumps_to_replace: pd.DataFrame, path):
@@ -123,7 +123,6 @@ def replace_pumps_and_evaluate_solution(networks_path, pumps_to_replace: pd.Data
             net = utils.replace_pumps(net, row["pump_id"], row["model"], row["psv_diameter"], row["psv_setting"])
 
         networks.append(net)
-        write_inpfile(net, str(i) + '-' + path)
     sc = Evaluator(networks)
     indicators = sc.evaluate_scenario()
 
