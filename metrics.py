@@ -139,6 +139,11 @@ class Evaluator:
         col.loc[mask] = col.loc[~mask].mean()
         return col
 
+    def get_total_demand(self):
+        demand = self.results_demand[self.dem_nodes.index]
+        demand = np.where(demand < 0, 0, demand)
+        return demand.sum(axis=1).sum()
+
     def get_total_supply(self, year=False):
         supply = self.results_demand.loc[:, self.networks_by_year[0].reservoir_name_list]
         supply = supply.apply(lambda x: self.filter_supply_outliers(x), axis=0)

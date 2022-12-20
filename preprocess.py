@@ -1,15 +1,9 @@
 import os
 import numpy as np
 import pandas as pd
-import itertools
-import glob
 from tqdm import tqdm
 import wntr
-from wntr.network.io import write_inpfile
 import warnings
-
-from metrics import Evaluator
-import utils
 
 
 warnings.filterwarnings(action='ignore', module='wntr')
@@ -90,43 +84,7 @@ def change_leaks_coef(inp_path, year, export_path):
     net.write_inpfile(export_path)
 
 
-def iterate_all_pumps_combs(networks_path: str, export_path):
-    """ A function to evaluate pumps' models combinations
 
-    :param networks_path:   path to dir with 6 networks (one for every year)
-    :return:                csv file with objectives value for every pumps combination
-    """
-
-    df = pd.read_csv(os.path.join(RESOURCES_DIR, "pump_candidates.csv"))
-    df['pump_model'] = df['pump_id'] + '-' + df['model']
-
-    models = []
-    groups = df.groupby(by='pump_id')
-    for group, data in groups:
-        models.append(data['pump_model'].tolist())
-
-    combinations = (list(itertools.product(*models)))
-    results = pd.DataFrame()
-    for i, c in tqdm(enumerate(combinations), total=len(combinations)):
-        indicators = replace_pumps_and_evaluate_solution(networks_path, df.loc[df['pump_model'].isin(c)], path=str(i)+'.inp')
-        pumps = df.loc[df['pump_model'].isin(c)]
-        pumps = dict(zip(pumps["pump_id"], pumps["model"]))
-        results = pd.concat([results, pd.DataFrame.from_dict({**indicators, **pumps}, orient='index').T], axis=0)
-        results.to_csv(export_path)
-
-
-def replace_pumps_and_evaluate_solution(networks_path, pumps_to_replace: pd.DataFrame, path):
-    networks = []
-    for file_path in glob.glob(os.path.join(networks_path, '*.inp')):
-        net = wntr.network.WaterNetworkModel(file_path)
-        for i, row in pumps_to_replace.iterrows():
-            net = utils.replace_pumps(net, row["pump_id"], row["model"], row["psv_diameter"], row["psv_setting"])
-
-        networks.append(net)
-    sc = Evaluator(networks)
-    indicators = sc.evaluate_scenario()
-
-    return indicators
 
 
 if __name__ == '__main__':
