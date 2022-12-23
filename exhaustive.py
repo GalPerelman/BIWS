@@ -33,8 +33,6 @@ class ControlChecker:
         self.inp_name = utils.get_file_name_from_path(self.inp_path)[0]
         self.output_dir = utils.validate_dir_path(os.path.join(self.output_dir))
         self.wn = wntr.network.WaterNetworkModel(self.inp_path)
-        self.wn.options.time.duration = 48*3600
-
         self.benchmark = Evaluator([self.wn]).evaluate_scenario()
         self.results = {}
 
@@ -61,8 +59,6 @@ class ControlChecker:
         valves_two_settings = [(valve, time) for valve in self.valves for time in ['night', 'morning']]
 
         for n in range(1, len(valves_two_settings)):
-            print(f'analyzing {n} pipe open\n')
-
             for cvs in tqdm(list(combinations(valves_two_settings, n))):
                 net = deepcopy(self.wn)
 
