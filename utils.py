@@ -1,7 +1,9 @@
 import os
 import numpy as np
 import pandas as pd
-
+import wntr
+import wntr.network.controls as controls
+from functools import singledispatch
 
 #  General utils
 def validate_dir_path(path):
@@ -20,6 +22,41 @@ def get_file_name_from_path(path):
     file_name = os.path.basename(path)
     file_name, ext = os.path.splitext(file_name)
     return file_name, ext
+
+
+def round_dict(d, digits):
+    return {k: round(v, digits) for k, v in d.items()}
+
+
+@singledispatch
+def keys_to_strings(ob):
+    return ob
+
+
+@keys_to_strings.register
+def handle_dict(ob: dict):
+    return {str(k): keys_to_strings(v) for k, v in ob.items()}
+
+
+# EPANET utils (using wntr)
+
+def set_valve_status(net, valve_name, status):
+    """
+
+    :param net:             The net where valve status is changed (wntr.metwork.WaterNetworkModel)
+    :param valve_name:      Valve id
+    :param status:          Required status (str)
+    :return:                Modified net
+    """
+    net.get_link(valve_name).initial_status = 'Open'
+    return net
+
+
+def add_status_by_time_control(net, element, start, value, name):
+    cond = controls.TimeOfDayCondition(net, relation='=', threshold=start * 3600)
+    cont = controls.Control(cond, controls.ControlAction(element, 'status', value))
+    net.add_control(name + str(element.name), cont)
+    return net
 
 
 # Greedy utils

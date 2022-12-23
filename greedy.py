@@ -63,7 +63,6 @@ class Greedy:
         pipes = pipes.loc[pipes['hgl'] >= self.hgl_threshold]  # Select candidates
         pipes.sort_values('hgl', inplace=True, ascending=False)
         pipes.set_index('link_id', inplace=True)
-
         leaks = evaluator.leaks_summary()
         leaks.loc[:, 'evaluate_flag'] = 1
         leaks.set_index('Leak_id', inplace=True)
@@ -256,7 +255,7 @@ class Greedy:
                                             'actions': num_actions,
                                             'cost': cost,
                                             'used budget': used_budget}, index=[0]),
-                              pd.DataFrame(round_obj(updated_obj, 4), index=[0])], axis=1)
+                              pd.DataFrame(utils.round_dict(updated_obj, 4), index=[0])], axis=1)
 
             iterations = pd.concat([iterations, iter])
             print(f"||Iter time: {time.time() - iter_start_time:.1f} seconds",
@@ -264,7 +263,7 @@ class Greedy:
                   f"| Iter Actions: {num_actions}",
                   f"| Iter cost: {cost}",
                   f"| Budget: {used_budget}",
-                  f"| Objectives: {round_obj(updated_obj, 4)}||")
+                  f"| Objectives: {utils.round_dict(updated_obj, 4)}||")
 
             evaluations = evaluations[~evaluations.index.isin(actions.index)]
             iterations.to_csv(os.path.join(self.output_dir, self.net_name + '_iterations.csv'))
@@ -280,8 +279,4 @@ class Greedy:
                 break
 
         utils.remove_files('temp.bin', 'temp.inp', 'temp.rpt')
-
-
-def round_obj(obj, digits):
-    return {k: round(v, digits) for k, v in obj.items()}
 
