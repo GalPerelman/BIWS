@@ -2,7 +2,9 @@
 	"class1": [
 			"V_TR",
 			"CV8",
-			"CV12"
+			"CV12",
+			"B_PL",
+			"B_SM"
 			],
 	"class2": [
 			"V_MV1",
@@ -17,19 +19,23 @@
 			],
 	"class4": [
 			"V_PE1",
-			"V_PE2"
+			"V_PE2",
+			"B_AB"
 			],
 	"class5": [
 			"V_MO1",
 			"V_MO2",
 			"V_MO3",
-			"V_MO4"
+			"V_MO4",
+			"B_SA"
 			],
 	"class6": [
 			"CV1",
 			"CV6",
 			"CV12",
-			"V_TR"
+			"V_TR",
+			"B_PT1",
+			"B_PT2"
 			],
 	"class7": [
 		"V_LL_1",
