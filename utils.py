@@ -83,6 +83,27 @@ def fix_leak_cost(coef, diameter_mm):
         return detect_cost + repair_cost
 
 
+def get_benchmarks(metrics: pd.DataFrame):
+    """
+    Get the best and worst for each metric
+    :param metrics:     pd.DataFrame metrics columns are name 1-9
+    :return:            two dictionaries of best and worst values
+    """
+    # Clear invalid results
+    # remove rows with negative values
+    metrics = metrics[(metrics > 0).all(1)]
+    # remove rows with values larger than 1 (except from metric 7, 8)
+    metrics = metrics.drop(metrics[(metrics['1'] > 1) | (metrics['2'] > 1) | (metrics['3'] > 1)
+                                   | (metrics['4'] > 1) | (metrics['5'] > 1) | (metrics['6'] > 1)
+                                   | (metrics['9'] > 1)].index, axis=0)
+
+    mx = metrics.max(axis=0).to_dict()
+    mn = metrics.min(axis=0).to_dict()
+    best = {1: mx['1'], 2: mx['2'], 3: mn['3'], 4: mx['4'], 5: mx['5'], 6: mx['6'], 7: mn['7'], 8: mn['8'], 9: mx['9']}
+    worst = {1: mn['1'], 2: mn['2'], 3: mx['3'], 4: mn['4'], 5: mn['5'], 6: mn['6'], 7: mx['7'], 8: mx['8'], 9: mn['9']}
+    return best, worst
+
+
 def normalize_obj(worse, objectives):
     # best is 1 for max objectives and 0 for min objectives
     best = pd.DataFrame(index=range(1, 10), data=[1, 1, 0, 1, 1, 1, 0, 0, 1], columns=['best'])
