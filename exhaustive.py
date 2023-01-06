@@ -5,9 +5,11 @@ import warnings
 import pandas as pd
 import itertools
 from itertools import combinations
+from itertools import product
 from collections import Counter
 from copy import deepcopy
 from tqdm import tqdm
+from typing import Dict
 import wntr
 import wntr.network.controls as controls
 
@@ -24,6 +26,7 @@ class ControlChecker:
     inp must be cleaned of previous controls
 
     """
+
     def __init__(self, inp_path, zone, valves, output_dir):
         self.inp_path = inp_path
         self.zone = zone
@@ -52,7 +55,7 @@ class ControlChecker:
         net = deepcopy(self.wn)
         self.set_all_elements(net, 'Closed')
         metrics, total_demand, total_supply = evaluate(self.wn)
-        norm = sum(utils.normalize_obj(self.benchmark, metrics).values())
+        norm = sum(utils.normalize_obj(metrics, self.benchmark, best=False).values())
         self.record_results('all_closed', metrics, norm, total_demand, total_supply)
 
         # iterate all combinations
@@ -71,37 +74,19 @@ class ControlChecker:
                     net.get_link(cv).initial_status = 'Open'
                 for (cv, time) in cvs:
                     if cv not in all_open_cv:
-                        net = self.add_control(net, net.get_link(cv), time)
+                        net = utils.add_control(net, net.get_link(cv), time)
                 metrics, total_demand, total_supply = evaluate(net)
-                norm = sum(utils.normalize_obj(self.benchmark, metrics).values())
+                norm = sum(utils.normalize_obj(metrics, worse=self.benchmark, best=False).values())
                 self.record_results(cvs, metrics, norm, total_demand, total_supply)
 
         # all opened
         net = deepcopy(self.wn)
         self.set_all_elements(net, 'Open')
         metrics, total_demand, total_supply = evaluate(self.wn)
-        norm = sum(utils.normalize_obj(self.benchmark, metrics).values())
+        norm = sum(utils.normalize_obj(metrics, worse=self.benchmark, best=False).values())
         self.record_results('all_open', metrics, norm, total_demand, total_supply)
 
         self.export()
-
-    def add_control(self, net, elem, time):
-        cond_beginning = controls.TimeOfDayCondition( net, relation='=', threshold=0)
-        cond = controls.TimeOfDayCondition(net, relation='=', threshold=7*3600)
-        cond_end = controls.TimeOfDayCondition(net, relation='=', threshold=24*3600)
-        if time == 'night':
-            night_close = controls.Control(cond, controls.ControlAction(elem, 'status', 0))
-            night_open = controls.Control(cond_beginning, controls.ControlAction(elem, 'status', 1))
-            net.add_control('control_night_open' + str(elem.name), night_open)
-            net.add_control('control_night_close' + str(elem.name), night_close)
-
-        elif time == 'morning':
-            morning_open = controls.Control(cond, controls.ControlAction(elem, 'status', 1))
-            morning_close = controls.Control(cond_end, controls.ControlAction(elem, 'status', 0))
-            net.add_control('control_morning_open' + str(elem.name), morning_open)
-            net.add_control('control_morning_close' + str(elem.name), morning_close)
-
-        return net
 
     def export(self):
         results = utils.handle_dict(self.results)
@@ -114,6 +99,33 @@ def evaluate(net):
     evaluator = Evaluator([net])
     metrics = utils.round_dict(evaluator.evaluate_scenario(), 4)
     return metrics, evaluator.get_total_demand(), evaluator.get_total_supply()
+
+
+def construct_controls_final_candidates(exhaustive_results_path: str, n_best: int, output_path: str):
+    res = pd.DataFrame()
+    for subdir, dirs, files in os.walk(exhaustive_results_path):
+        for file in files:
+            if file.endswith('.csv'):
+                df = pd.read_csv(os.path.join(subdir, file), index_col=0)
+                df = df.rename(columns={col: int(col) for col in ['1', '2', '3', '4', '5', '6', '7', '8', '9']})
+                best, worse = utils.get_benchmarks(df)
+                df['N'] = df[range(1, 10)].apply(lambda x: sum(utils.normalize_obj(x.to_dict(), worse, best).values()),
+                                                 axis=1)
+
+                df.sort_values('N', ascending=True)
+                df['year'] = os.path.split(subdir)[1].split('-')[0]
+                df['class'] = file.split('_')[0]
+                df['idx'] = range(1, len(df) + 1)
+                res = pd.concat([res, df.nsmallest(n_best, 'N')])
+    res.to_csv(output_path, index=True)
+
+
+def get_combinations(candidates: Dict[str, list]):
+    keys = candidates.keys()
+    values = candidates.values()
+    combs = list(product(*values))
+    print(len(combs))
+    return [{key: value for key, value in zip(keys, c)} for c in combs]
 
 
 def iterate_all_pumps_combs(networks_path: str, export_path):

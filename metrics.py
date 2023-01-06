@@ -389,12 +389,4 @@ if __name__ == "__main__":
     # Usage example
     inp_path = os.path.join(RESOURCES_DIR, 'networks', 'BIWS_y0.inp')
     wn = wntr.network.WaterNetworkModel(inp_path)
-    # print(Evaluator([wn]).evaluate_scenario())
-
-
-    wn.options.time.duration = 5 * 3600
-    evaluator = Evaluator([wn])
-    evaluator.run_hyd()
-
-
-
+    print(Evaluator([wn]).evaluate_scenario())

@@ -122,7 +122,7 @@ class Greedy:
                 temp_net, cost = self.replace_single_pipe(temp_net, row.name, next_diam_m)
                 delta_cost = cost - self.pipes.loc[self.pipes.index == row.name, 'current_cost'].values[0]
                 obj, flow, pressure = self.get_objectives_and_detect_changes(temp_net)
-                so = sum(utils.normalize_obj(worse_benchmark, obj).values())  # Normalized single objective
+                so = sum(utils.normalize_obj(obj, worse_benchmark, best=False).values())  # Normalized single objective
                 scenario = pd.DataFrame({'action': 'pipe', 'element': row.name, 'new_diameter_m': next_diam_m,
                                          'd_cost': delta_cost, 'so': so}, index=[i])
                 scenario = pd.concat([scenario, pd.DataFrame(obj, index=[i])], axis=1)
@@ -137,7 +137,7 @@ class Greedy:
             diameter_mm = temp_net.get_link(row['Link_id']).diameter * 1000
             temp_net, cost = self.repair_leak(temp_net, row.name, diameter_mm)
             obj, flow, pressure = self.get_objectives_and_detect_changes(temp_net)
-            so = sum(utils.normalize_obj(worse_benchmark, obj).values())  # Normalized single objective
+            so = sum(utils.normalize_obj(obj, worse_benchmark, best=False).values())  # Normalized single objective
             scenario = pd.DataFrame({'action': 'leak', 'element': row.name, 'leak_pipe_diameter_mm': diameter_mm,
                                      'd_cost': cost, 'so': so}, index=[i])
             scenario = pd.concat([scenario, pd.DataFrame(obj, index=[i])], axis=1)
