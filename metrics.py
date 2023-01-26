@@ -355,7 +355,6 @@ class Evaluator:
         df.loc[:, f'min_{param}_delta'] = df.apply(lambda x: np.min(x['param_ts']), axis=1)
         df.loc[:, f'max_{param}_delta'] = df.apply(lambda x: np.max(x['param_ts']), axis=1)
         df = df.sort_values(f'mean_{param}_delta', ascending=False)
-        df.loc[df['ID'] == 'L1911', ['head_ts_start', 'head_ts_end', 'param_ts']].to_csv('L1911.csv')
         return df
 
 
