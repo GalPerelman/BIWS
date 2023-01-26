@@ -1,9 +1,9 @@
 import os
 import numpy as np
 import pandas as pd
-import wntr
 import wntr.network.controls as controls
 from functools import singledispatch
+
 
 #  General utils
 def validate_dir_path(path):
@@ -15,7 +15,10 @@ def validate_dir_path(path):
 def remove_files(*files):
     for file in files:
         if file and os.path.exists(file) and not os.path.isdir(file):
-            os.remove(file)
+            try:
+                os.remove(file)
+            except PermissionError:
+                pass
 
 
 def get_file_name_from_path(path):
@@ -39,7 +42,6 @@ def handle_dict(ob: dict):
 
 
 # EPANET utils (using wntr)
-
 def set_valve_status(net, valve_name, status):
     """
 
@@ -79,7 +81,6 @@ def add_control(net, elem, time):
 
 
 # Greedy utils
-
 DIAMETERS = np.array([50, 63, 75, 100, 125, 150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800])  # mm
 DIAMETERS_m = DIAMETERS / 1000
 
