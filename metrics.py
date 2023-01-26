@@ -216,19 +216,10 @@ class Evaluator:
         i6 = total_continuous_pressure_nodes / (self.num_dem_nodes * self.num_years)
         return i6
 
-    def linear_interpolation_i7(self, row):
-        temp = pd.DataFrame(data={'start': row['head_ts_start'], 'end': row['head_ts_end']})
-        neg = temp[['start', 'end']].min(axis=1)
-        pos = temp[['start', 'end']].max(axis=1)
-        temp['interpolate'] = (- neg * row['Length']) / (pos - neg)
-        temp.loc[(temp['start'] > 0) & (temp['end'] > 0), 'interpolate'] = 0
-        temp.loc[(temp['start'] < 0) & (temp['end'] < 0), 'interpolate'] = 1 * row['Length']
-        return temp['interpolate'].max()
-
-    def vectorize_interpolatoion(self, pipes_headloss: pd.DataFrame):
+    def vectorize_interpolatoion(self, pipes_param_summary: pd.DataFrame, param='pressure'):
         # initiate two dataframes one for start and one for end nodes pressures
-        start_p = pd.DataFrame(pipes_headloss['head_ts_start'].to_list(), index=pipes_headloss.index).T
-        end_p = pd.DataFrame(pipes_headloss['head_ts_end'].to_list(), index=pipes_headloss.index).T
+        start_p = pd.DataFrame(pipes_param_summary[f'{param}_ts_start'].to_list(), index=pipes_param_summary.index).T
+        end_p = pd.DataFrame(pipes_param_summary[f'{param}_ts_end'].to_list(), index=pipes_param_summary.index).T
 
         # converting the dataframes to high and low pressure in both edges of the pipe
         high = pd.concat([start_p, end_p]).groupby(level=0).max()
@@ -242,15 +233,15 @@ class Evaluator:
         df = np.where((start_p < 0) & (end_p < 0), 1, df)
 
         # multiply by the pipe length
-        df = df @ np.eye(len(pipes_headloss)) * pipes_headloss['Length'].values
+        df = df @ np.eye(len(pipes_param_summary)) * pipes_param_summary['Length'].values
         max_negative_length = df.max(axis=0)
         return max_negative_length.sum()
 
     def i7(self):
         i7 = 0
         for year in range(self.num_years):
-            df = self.pipes_headloss_summary(year)
-            i7 += self.vectorize_interpolatoion(df)
+            df = self.pipes_summary(year, param='pressure')
+            i7 += self.vectorize_interpolatoion(df, param='pressure')
         i7 /= self.num_years
         return i7
 
@@ -352,19 +343,19 @@ class Evaluator:
         df['total_cost'] = df['detect_cost'] + df['repair_cost']
         return df
 
-    def pipes_headloss_summary(self, year):
-        df_head = self.results_by_year[year].node['head'].T
+    def pipes_summary(self, year, param='pressure'):
+        df_nodes = self.results_by_year[year].node[param].T
+        param_ts = df_nodes.apply(lambda x: np.array(x), axis=1)
+        param_ts.name = f'{param}_ts'
 
-        head_ts = df_head.apply(lambda x: np.array(x), axis=1)
-        head_ts.name = 'head_ts'
-
-        df = pd.merge(self.pipes_data, head_ts, left_on='Node1', right_index=True)
-        df = pd.merge(df, head_ts, left_on='Node2', right_index=True, suffixes=('_start', '_end'))
-        df['headloss_ts'] = df['head_ts_end'] - df['head_ts_start']
-        df.loc[:, 'mean_head_loss'] = df.apply(lambda x: np.mean(x['headloss_ts']), axis=1)
-        df.loc[:, 'min_head_loss'] = df.apply(lambda x: np.min(x['headloss_ts']), axis=1)
-        df.loc[:, 'max_head_loss'] = df.apply(lambda x: np.max(x['headloss_ts']), axis=1)
-        df = df.sort_values('max_head_loss', ascending=False)
+        df = pd.merge(self.pipes_data, param_ts, left_on='Node1', right_index=True)
+        df = pd.merge(df, param_ts, left_on='Node2', right_index=True, suffixes=('_start', '_end'))
+        df['param_ts'] = df[f'{param}_ts_end'] - df[f'{param}_ts_start']
+        df.loc[:, f'mean_{param}_delta'] = df.apply(lambda x: np.mean(x['param_ts']), axis=1)
+        df.loc[:, f'min_{param}_delta'] = df.apply(lambda x: np.min(x['param_ts']), axis=1)
+        df.loc[:, f'max_{param}_delta'] = df.apply(lambda x: np.max(x['param_ts']), axis=1)
+        df = df.sort_values(f'mean_{param}_delta', ascending=False)
+        df.loc[df['ID'] == 'L1911', ['head_ts_start', 'head_ts_end', 'param_ts']].to_csv('L1911.csv')
         return df
 
 
