@@ -54,8 +54,9 @@ class Greedy:
         evaluator = Evaluator([self.net])
         evaluator.run_hyd()
 
-        pipes = evaluator.pipes_headloss_summary(0)[['ID', 'Length', 'Diameter', 'mean_head_loss']]
-        pipes['hgl'] = pipes['mean_head_loss'].abs() / pipes['Length']
+        param = 'head'
+        pipes = evaluator.pipes_summary(year=0, param=param)[['ID', 'Length', 'Diameter', f'mean_{param}_delta']]
+        pipes['hgl'] = pipes['mean_head_delta'].abs() / pipes['Length']
         pipes = pipes.sort_values('ID')
         pipes = pipes.rename(columns={'ID': 'link_id'})
         pipes.loc[:, 'current_cost'] = 0
@@ -63,6 +64,7 @@ class Greedy:
         pipes = pipes.loc[pipes['hgl'] >= self.hgl_threshold]  # Select candidates
         pipes.sort_values('hgl', inplace=True, ascending=False)
         pipes.set_index('link_id', inplace=True)
+
         leaks = evaluator.leaks_summary()
         leaks.loc[:, 'evaluate_flag'] = 1
         leaks.set_index('Leak_id', inplace=True)
