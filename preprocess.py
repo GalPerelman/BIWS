@@ -84,9 +84,6 @@ def change_leaks_coef(inp_path, year, export_path):
     net.write_inpfile(export_path)
 
 
-
-
-
 if __name__ == '__main__':
     base_net = os.path.join(RESOURCES_DIR, 'networks', 'BIWS.inp')
     output_path = os.path.join(RESOURCES_DIR, 'networks')

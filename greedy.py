@@ -1,15 +1,18 @@
 import os
 import pandas as pd
 import numpy as np
-import wntr
-from wntr.network.io import write_inpfile
 import time
 import math
+import wntr
+from wntr.network.io import write_inpfile
 from tqdm import tqdm
 from copy import deepcopy
 
+# local imports
 from metrics import Evaluator
 import utils
+
+pd.options.mode.chained_assignment = None  # default='warn'
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCES_DIR = os.path.join(BASE_DIR, 'resources')
@@ -24,12 +27,12 @@ class Greedy:
         self.output_dir = utils.validate_dir_path(output_dir)
         self.budget = budget
         self.actions_ratio = actions_ratio
-        self.hgl_threshold = hgl_threshold          # Threshold for pipes candidates
-        self.n_leaks = n_leaks                      # Number of candidates leaks
+        self.hgl_threshold = hgl_threshold  # Threshold for pipes candidates
+        self.n_leaks = n_leaks  # Number of candidates leaks
         self.reevaluate_ratio = reevaluate_ratio
-        self.total_run_time = total_run_time        # Greedy run time
-        self.load_init_path = load_init_path        # For using last iteration of previous year as input
-        self.hours_duration = hours_duration        # Hydraulic simulation duration (if different from inp)
+        self.total_run_time = total_run_time  # Greedy run time
+        self.load_init_path = load_init_path  # For using last iteration of previous year as input
+        self.hours_duration = hours_duration  # Hydraulic simulation duration (if different from inp)
 
         self.net_name = utils.get_file_name_from_path(self.inp_path)[0]
         self.net = wntr.network.WaterNetworkModel(self.inp_path)
@@ -41,7 +44,19 @@ class Greedy:
         self.all_pipes['original_id'] = self.all_pipes.index.to_series().str.split('_').str[0]
         self.pipes, self.leaks, self.all_leaks = self.get_candidates()
         self.iter_evaluations, self.iter_budget = self.get_iter_evaluations_and_budget()
+        self.record_run_details()
         self.detection_record = pd.DataFrame()
+
+    def record_run_details(self):
+        with open(os.path.join(self.output_dir, 'run_details.txt'), 'w') as file:
+            for k in ['hours_duration', 'inp_path', 'budget', 'actions_ratio', 'hgl_threshold', 'n_leaks',
+                      'reevaluate_ratio', 'total_run_time', 'load_init_path']:
+                file.write("{}: {}\n".format(k, self.__dict__[k]))
+
+            file.write(f'n_pipes: {len(self.pipes)}\n')
+            file.write(f'num_iter: {self.total_run_time * 3600 / (self.iter_evaluations * 60)}\n')
+            file.write(f'min_iter_evaluations: {self.iter_evaluations}\n')
+            file.write(f'max_iter_budget: {self.iter_budget}\n')
 
     def get_iter_evaluations_and_budget(self):
         n_candidates = len(self.pipes) + len(self.leaks)
@@ -54,15 +69,30 @@ class Greedy:
         evaluator = Evaluator([self.net])
         evaluator.run_hyd()
 
-        param = 'head'
-        pipes = evaluator.pipes_summary(year=0, param=param)[['ID', 'Length', 'Diameter', f'mean_{param}_delta']]
-        pipes['hgl'] = pipes['mean_head_delta'].abs() / pipes['Length']
-        pipes = pipes.sort_values('ID')
-        pipes = pipes.rename(columns={'ID': 'link_id'})
-        pipes.loc[:, 'current_cost'] = 0
-        pipes.loc[:, 'evaluate_flag'] = 1
-        pipes = pipes.loc[pipes['hgl'] >= self.hgl_threshold]  # Select candidates
-        pipes.sort_values('hgl', inplace=True, ascending=False)
+        # Get all pipes in the network with their length attribute
+        length = self.net.query_link_attribute('length', link_type=wntr.network.model.Pipe)
+        length = pd.DataFrame(length, columns=['length'])
+
+        # Compute mean headloss over the simulation horizon
+        pipes = pd.DataFrame(evaluator.results_by_year[0].link['headloss'].mean(axis=0).T, columns=['mean_head_loss'])
+
+        pipes = pd.merge(pipes, length, left_index=True, right_index=True, how='inner')
+        pipes = pd.merge(pipes, self.all_pipes, left_index=True, right_index=True, how='inner')
+
+        # Remove the short pipes that connected leaks (check valves links)
+        pipes = pipes.loc[~pipes['original_id'].str.startswith('LeakPipe')]
+        # Drop pipes with the same original id
+        # As a result of leaks modeling the original pipes are split which create duplications
+        # Candidate pipes are according to the original pipes
+        # A potential drawback here is that HGL is changed between different sections of the pipe
+        # Here we assume the change is neglectable and select the candidates based on arbitrary pipe sections
+        pipes = pipes.sort_values('mean_head_loss').drop_duplicates('original_id', keep='last')
+        pipes = pipes.rename(columns={'original_id': 'link_id'})
+
+        pipes.loc[:, 'current_cost'] = 0  # pipe cost for greedy - increase by delta with every diameter jump
+        pipes.loc[:, 'evaluate_flag'] = 1  # flag for greedy evaluations - 1 for evaluate all in firs iteration
+        pipes = pipes.loc[pipes['mean_head_loss'] >= self.hgl_threshold]  # Select candidates
+        pipes.sort_values('mean_head_loss', inplace=True, ascending=False)
         pipes.set_index('link_id', inplace=True)
 
         leaks = evaluator.leaks_summary()
@@ -100,7 +130,7 @@ class Greedy:
     def repair_leak(self, func_net, leak_id, pipe_diameter_mm):
         try:
             leak = func_net.get_node(leak_id)
-            coef = leak.emitter_coefficient * 1000  # wntr uses only SI units, converting to (l/s)/m
+            coef = leak.emitter_coefficient * 1000  # wntr uses SI units, converting to (l/s)/m
             cost = utils.fix_leak_cost(coef, pipe_diameter_mm)
             # leak.emitter_coefficient = 0
             func_net.remove_link('LeakPipe_' + leak_id.split('_')[1])
@@ -159,6 +189,10 @@ class Greedy:
 
     def get_evaluation_flag(self, improved_net, benchmark_flows):
         obj, flows, pressures = self.get_objectives_and_detect_changes(improved_net)
+        if flows is None:
+            # In case of EPANET error get_objectives_and_detect_changes will return flows=False
+            # Evaluation flags will remain as in previous iteration
+            return obj
         df = pd.merge(benchmark_flows.rename('benchmark'), flows, left_index=True, right_index=True)
         df = df.loc[df.index.isin(self.pipes.index.tolist() + self.leaks['Link_id'].tolist())]
         df['delta'] = np.abs(df['benchmark'] - df['flow'])
@@ -191,14 +225,20 @@ class Greedy:
 
         return net, improve_cost
 
-    def get_objectives_and_detect_changes(self, net):
+    def get_objectives_and_detect_changes(self, net, retries=0):
+        if retries == 3:
+            benchmark = {1: 0, 2: 0, 3: 1, 4: 0, 5: 0, 6: 0, 7: 1, 8: 1, 9: 0}
+            flows, pressures = None, None
+            return benchmark, flows, pressures
         try:
             evaluator = Evaluator([net])
             benchmark = evaluator.evaluate_scenario()
             flows = np.abs(evaluator.results_flow).mean().rename('flow')
             pressures = evaluator.results_pressure.mean().rename('pressure')
         except Exception as e:
-            write_inpfile(net, os.path.join(self.output_dir, 'debuging.inp'))
+            retries += 1
+            self.get_objectives_and_detect_changes(self, net, retries=retries)
+            write_inpfile(net, os.path.join(self.output_dir, time.strftime("%Y%m%d%H%M%S") + '_debugging.inp'))
             print(e)
         return benchmark, flows, pressures
 
@@ -208,7 +248,6 @@ class Greedy:
         x_net = deepcopy(self.net)
         results = pd.DataFrame()
         iterations = pd.DataFrame()
-        start_time = time.time()
         break_flag = False
 
         while used_budget < self.budget:
@@ -252,33 +291,27 @@ class Greedy:
             evaluations.to_csv(os.path.join(self.output_dir, self.net_name + '_' + str(n_iter) + '.csv'))
             write_inpfile(x_net, os.path.join(self.output_dir, self.net_name + '_' + str(n_iter) + '.inp'))
 
-            iter = pd.concat([pd.DataFrame({'time': time.time() - iter_start_time,
-                                            'evaluations': num_eval,
-                                            'actions': num_actions,
-                                            'cost': cost,
-                                            'used budget': used_budget}, index=[0]),
-                              pd.DataFrame(utils.round_dict(updated_obj, 4), index=[0])], axis=1)
+            current_iter = pd.concat([pd.DataFrame({'time': time.time() - iter_start_time,
+                                                    'evaluations': num_eval,
+                                                    'actions': num_actions,
+                                                    'cost': cost,
+                                                    'used budget': used_budget}, index=[0]),
+                                      pd.DataFrame(utils.round_dict(updated_obj, 4), index=[0])], axis=1)
 
-            iterations = pd.concat([iterations, iter])
+            iterations = pd.concat([iterations, current_iter])
             print(f"||Iter time: {time.time() - iter_start_time:.1f} seconds",
                   f"| Iter Evaluations: {num_eval}",
                   f"| Iter Actions: {num_actions}",
                   f"| Iter cost: {cost}",
                   f"| Budget: {used_budget}",
-                  f"| Objectives: {utils.round_dict(updated_obj, 4)}||")
+                  f"| Objectives: {utils.round_dict(updated_obj, 3)}||")
 
             evaluations = evaluations[~evaluations.index.isin(actions.index)]
             iterations.to_csv(os.path.join(self.output_dir, self.net_name + '_iterations.csv'))
             results.to_csv(os.path.join(self.output_dir, self.net_name + '_actions.csv'))
-            with open(os.path.join(self.output_dir, 'run_details.txt'), 'w') as file:
-                file.write('Run time: %0.2f \n' % (time.time() - start_time))
-                for k in ['hours_duration', 'inp_path', 'budget', 'actions_ratio', 'hgl_threshold', 'n_leaks',
-                          'reevaluate_ratio', 'total_run_time', 'load_init_path']:
-                    file.write("{}: {}\n".format(k, self.__dict__[k]))
 
             n_iter += 1
             if break_flag:
                 break
 
         utils.remove_files('temp.bin', 'temp.inp', 'temp.rpt')
-
