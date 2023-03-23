@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import numpy as np
 import time
-import math
 import wntr
 from wntr.network.io import write_inpfile
 from tqdm import tqdm
@@ -60,7 +59,7 @@ class Greedy:
 
     def get_iter_evaluations_and_budget(self):
         n_candidates = len(self.pipes) + len(self.leaks)
-        iter_evaluations = math.ceil(self.reevaluate_ratio * n_candidates)
+        iter_evaluations = int(self.reevaluate_ratio * n_candidates)
         num_iter = self.total_run_time * 3600 / (iter_evaluations * 60)  # 60 sec - estimated single evaluation
         iter_budget = self.budget / num_iter
         return iter_evaluations, iter_budget
@@ -95,13 +94,14 @@ class Greedy:
         pipes.sort_values('mean_head_loss', inplace=True, ascending=False)
         pipes.set_index('link_id', inplace=True)
 
+        # Leaks candidates selection
         leaks = evaluator.leaks_summary()
         leaks.loc[:, 'evaluate_flag'] = 1
         leaks.set_index('Leak_id', inplace=True)
         all_leaks = deepcopy(leaks)
         leaks['rank'] = leaks['total_water_loss'] / leaks['total_cost']
         leaks.sort_values('rank', inplace=True, ascending=False)
-        leaks = leaks.nlargest(self.n_leaks, 'rank')  # Select candidates
+        leaks = leaks.nlargest(self.n_leaks, 'total_water_loss')
         return pipes, leaks, all_leaks
 
     def replace_single_pipe(self, net, pipe_id, diameter_m):
@@ -116,8 +116,8 @@ class Greedy:
             cost += utils.replace_pipe_cost(diameter_m, pipe.length)
         else:
             for i, row in pipe_leaks.iterrows():
-                net, leak_cost = self.repair_leak(net, row.name, row['diameter'] * 1000)
                 #  ignoring the cost of fixing leaks when replacing the pipe
+                net, leak_cost = self.repair_leak(net, row.name, row['diameter'] * 1000)
 
             for i, row in pipe_segments.iterrows():
                 pipe = net.get_link(row.name)
