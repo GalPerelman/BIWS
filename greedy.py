@@ -268,7 +268,6 @@ class Greedy:
 
             num_eval = self.pipes['evaluate_flag'].sum() + self.leaks['evaluate_flag'].sum()
             evaluations = new_evaluations.combine_first(evaluations).sort_values('mb', ascending=False)
-
             actions = evaluations.loc[evaluations['mb'] >= evaluations['mb'].max() * (1 - self.actions_ratio)]
 
             iter_cost = actions['d_cost'].sum()
@@ -286,7 +285,12 @@ class Greedy:
 
             self.pipes.to_csv(os.path.join(self.output_dir, 'pipes_flags_' + str(n_iter) + '.csv'))
             self.leaks.to_csv(os.path.join(self.output_dir, 'leaks_flags_' + str(n_iter) + '.csv'))
-            updated_obj = self.get_evaluation_flag(x_net, flows)
+            if n_iter == 1 and self.load_init_path:
+                # use flags from previous year last run
+                updated_obj = benchmark
+                pass
+            else:
+                updated_obj = self.get_evaluation_flag(x_net, flows)
 
             evaluations.to_csv(os.path.join(self.output_dir, self.net_name + '_' + str(n_iter) + '.csv'))
             write_inpfile(x_net, os.path.join(self.output_dir, self.net_name + '_' + str(n_iter) + '.inp'))
