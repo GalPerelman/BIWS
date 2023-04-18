@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import wntr
+from wntr.network.io import write_inpfile
 import warnings
-
 
 warnings.filterwarnings(action='ignore', module='wntr')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -81,10 +81,11 @@ def change_leaks_coef(inp_path, year, export_path):
     for i, row in df.iterrows():
         leak_node = net.get_node(row['Leak_id'])
         leak_node.emitter_coefficient = row['year_' + str(year)]
-    net.write_inpfile(export_path)
+    write_inpfile(net, export_path)
 
 
 if __name__ == '__main__':
+    # Usage example - add year 0 leaks for the raw network
     base_net = os.path.join(RESOURCES_DIR, 'networks', 'BIWS.inp')
     output_path = os.path.join(RESOURCES_DIR, 'networks')
     p = Preprocess(base_net, output_path, 'BIWS_y0.inp')
