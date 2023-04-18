@@ -375,6 +375,12 @@ def evaluate_scenario(path_to_networks):
     return indicators
 
 
+def evaluate_single_net(inp_path):
+    net = wntr.network.WaterNetworkModel(inp_path)
+    indicators = Evaluator([net]).evaluate_scenario()
+    return indicators
+
+
 if __name__ == "__main__":
     # Usage example
     inp_path = os.path.join(RESOURCES_DIR, 'networks', 'BIWS_y0.inp')
