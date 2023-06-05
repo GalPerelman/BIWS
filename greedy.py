@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import time
+import math
 import wntr
 from wntr.network.io import write_inpfile
 from tqdm import tqdm
@@ -59,7 +60,7 @@ class Greedy:
 
     def get_iter_evaluations_and_budget(self):
         n_candidates = len(self.pipes) + len(self.leaks)
-        iter_evaluations = int(self.reevaluate_ratio * n_candidates)
+        iter_evaluations = math.ceil(self.reevaluate_ratio * n_candidates)
         num_iter = self.total_run_time * 3600 / (iter_evaluations * 60)  # 60 sec - estimated single evaluation
         iter_budget = self.budget / num_iter
         return iter_evaluations, iter_budget
@@ -257,6 +258,10 @@ class Greedy:
             if n_iter == 1 and self.load_init_path:
                 self.pipes = pd.read_csv(os.path.join(self.load_init_path, "pipes_flags_1.csv"), index_col=0)
                 self.leaks = pd.read_csv(os.path.join(self.load_init_path, "leaks_flags_1.csv"), index_col='Leak_id')
+
+                # pipes cost must be set to zero between years.
+                # replace pipe in new year include the entire pipe replacement cost and not just marginal cost
+                self.pipes['current_cost'] = 0
                 new_evaluations = pd.read_csv(os.path.join(self.load_init_path, "input_1.csv"), index_col='element')
             else:
                 new_evaluations = self.estimate_marginal_benefit(x_net, benchmark)
@@ -274,11 +279,11 @@ class Greedy:
             if iter_cost <= self.iter_budget:
                 actions = evaluations[evaluations['d_cost'].cumsum() <= self.iter_budget].copy()
             if used_budget + actions['d_cost'].sum() > self.budget:
-                actions = actions[actions['d_cost'].cumsum() < self.budget - used_budget]
+                actions = actions[actions['d_cost'].cumsum() <= self.budget - used_budget]
                 break_flag = True
 
             num_actions = len(actions)
-            actions.loc[:, 'iter'] = str(n_iter)
+            actions['iter'] = str(n_iter)
             results = pd.concat([results, actions], axis=0)
             x_net, cost = self.improve_net(x_net, actions)
             used_budget += cost
@@ -288,7 +293,6 @@ class Greedy:
             if n_iter == 1 and self.load_init_path:
                 # use flags from previous year last run
                 updated_obj = benchmark
-                pass
             else:
                 updated_obj = self.get_evaluation_flag(x_net, flows)
 
@@ -319,3 +323,13 @@ class Greedy:
                 break
 
         utils.remove_files('temp.bin', 'temp.inp', 'temp.rpt')
+
+
+if __name__ == "__main__":
+    # test greedy with small network
+    test_inp_path = os.path.join(RESOURCES_DIR, "networks", "tests", "greedy_test_1.inp")
+    output_dir_name = os.path.join('reproduce_for_paper', '6_test_greedy_break')
+    greedy = Greedy(test_inp_path, output_dir=output_dir_name, budget=50000, actions_ratio=0.3, hgl_threshold=0.003,
+                    n_leaks=50, reevaluate_ratio=0.01, total_run_time=2, hours_duration=24)
+
+    greedy.start()
