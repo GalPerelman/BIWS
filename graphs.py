@@ -16,7 +16,7 @@ from metrics import Evaluator
 pd.set_option("display.precision", 3)
 COLORS = ['#94D1FE', '#3288c7', '#1d72af', '#12476d', '#0a1c29']
 COLORS = ['#032962', '#005d8f', '#00aacc', '#70d8eb', '#b3e7f1']
-COLORS = ["#032962", "#0175b3", "#01a9cb", "#5ed3e8", "#D7F6FE"]
+COLORS = ["#032962", "#0175b3", "#01a9cb", "#5ed3e8", "#D7F6FE"][::-1]
 
 
 def load_networks():
@@ -76,14 +76,14 @@ def plot_leaks(networks, leaks_summary_path=''):
 
     # colors = ["#9CF1FA", '#0C75C0', "#0000FF", "#12476d", "#000080"]
     fig, ax = plt.subplots()
-    sub_axes = plt.axes([.4, .59, .32, .26])
-    _xmin, _xmax = 2250, 2520
-    _ymin, _ymax = 0, 200
+    sub_axes = plt.axes([.36, .57, .36, .28])
+    _xmin, _xmax = 2100, 2810
+    _ymin, _ymax = 0, 150
 
     df2 = df.loc[(df['total_cost'] > _xmin) & (df['total_cost'] < _xmax)]  # for zoomin plot
     df2 = df2.loc[(df2['total_water_loss'] > _ymin) & (df2['total_water_loss'] < _ymax)]  # for zoomin plot
 
-    ax.scatter(df['total_cost'], df['total_water_loss'], s=29, color='none', edgecolor='red', linewidth=0.5)
+    ax.scatter(df['total_cost'], df['total_water_loss'], s=28, color='none', edgecolor='red', linewidth=0.5)
     sub_axes.scatter(df2['total_cost'], df2['total_water_loss'], s=29, color='none', edgecolor='red', linewidth=0.5)
     for i, (file_name, net) in enumerate(networks.items()):
         if i > 0:
@@ -240,7 +240,10 @@ def plot_iterations(iterations_file):
     plt.axvspan(min_idx, max_idx, color='grey', alpha=0.4, lw=0)
 
     ax.plot(df['db_'])
-    # ax.plot(df['evaluations'])
+
+    fig, axes = plt.subplots(ncols=2)
+    axes[0].plot(df['actions'])
+    axes[1].plot(df['evaluations'])
 
 
 def plot_evaluations_per_pipe():
@@ -268,50 +271,54 @@ def plot_evaluations_per_pipe():
     plt.ylabel('Evaluations Count')
 
 
-if __name__ == "__main__":
-    y1_greedy = os.path.join('output', '2_fcv', '1_greedy_output', '20230606080239_y1')
-    y2_greedy = os.path.join('output', '2_fcv', '1_greedy_output', '20230608092158_y2')
-    y3_greedy = os.path.join('output', '2_fcv', '1_greedy_output', '20230610160100_y3')
-    y4_greedy = os.path.join('output', '2_fcv', '1_greedy_output', '20230611104545_y4')
-    y5_greedy = os.path.join('output', '2_fcv', '1_greedy_output', '20230613112601_y5')
-    all_greedy = [y1_greedy, y2_greedy, y3_greedy, y4_greedy, y5_greedy]
-
-    SOLUTION_PATH = os.path.join('output/2_fcv/2_final_networks')
-    all_networks = load_networks()
-    all_pipes = pd.read_csv('resources/pipes_data.csv')
-
-    # get_leaks_repaired_in_year(all_networks, 1)
-    # get_leaks_summary(export_path='output/fcv/data_for_figures/leaks_summary.csv')
-    # plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')
-
-    # metrics_by_year('output/2_fcv/score.csv')
-    # plot_iterations('output/2_fcv/all_iter.csv')
-    # plot_spatial_pipes()
-    # plot_spatial_leaks()
-
-    # plot_evaluations_per_pipe()  # in paper
-
-    # all_actions = pd.read_csv('output/2_fcv/all_actions.csv')
-    # all_leaks = pd.read_csv('resources/all_leaks_summary.csv')
-
-    temp_net = wntr.network.WaterNetworkModel(os.path.join('resources', 'networks', 'BIWS.inp'))
+def export_pipes_first_replacement_year(export_path):
+    temp_net = wntr.network.WaterNetworkModel(os.path.join('resources', 'networks', 'BIWS.inp'))  # raw network
     df = pd.read_csv(os.path.join('output', '2_fcv', 'pipes_repair_year.csv'), index_col=0)
     all_pipes = temp_net.query_link_attribute(attribute='length', link_type=wntr.network.Pipe).rename('length')
     all_pipes = pd.merge(all_pipes, df, left_index=True, right_on='pipe', how='outer')
     all_pipes = all_pipes.fillna(0)
     all_pipes.set_index('pipe', inplace=True)
     all_pipes = all_pipes.drop('length', axis=1)
-    print(all_pipes)
-    all_pipes.to_csv(os.path.join('output', '2_fcv', 'pipes_repair_year.csv'))
-    # for pipe_id in df.index:
-    #     pipe = temp_net.get_link(pipe_id)
-    #     pipe.year = df.loc[pipe_id]
+    all_pipes.to_csv(export_path)
 
-    # for year in [1, 2, 3, 4, 5]:
-    #     repaired_leaks = get_leaks_repaired_in_year(all_networks, year)
-    #     for leak in repaired_leaks.index:
-    #         l = temp_net.get_node(leak)
-    #         l.year = year
 
-    # wntr.network.io.write_inpfile(temp_net, os.path.join('output', '2_fcv', 'pipes_repair_year.inp'))
+def supply_vs_demand():
+    df = pd.DataFrame()
+    for y in range(6):
+        evaluator = Evaluator([all_networks['y'+str(y)]])
+        evaluator.run_hyd()
+        expected_dem = evaluator.expected_demand.sum(axis=1) * 1000
+        actual_dem = evaluator.results_demand[evaluator.dem_nodes.index]
+        actual_dem = np.where(actual_dem < 0, 0, actual_dem)
+        actual_dem = actual_dem.sum(axis=1) * 1000
+        df = pd.concat([df, pd.DataFrame({'Expected': expected_dem.sum(), 'Actual': actual_dem.sum()}, index=[y])])
+
+    print(df)
+    df.plot(kind='bar', stacked=True, color=COLORS, edgecolor='k', width=0.6, figsize=(8, 4), linewidth=0.6)
+
+
+if __name__ == "__main__":
+    y1_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230606080239_y1')
+    y2_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230608092158_y2')
+    y3_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230610160100_y3')
+    y4_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230611104545_y4')
+    y5_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230613112601_y5')
+    all_greedy = [y1_greedy, y2_greedy, y3_greedy, y4_greedy, y5_greedy]
+
+    SOLUTION_PATH = os.path.join('output/fcv/2_final_networks')
+    all_networks = load_networks()
+    all_pipes = pd.read_csv('resources/pipes_data.csv')
+
+    # get_leaks_repaired_in_year(all_networks, 1)
+    # get_leaks_summary(export_path='output/fcv/data_for_figures/leaks_summary.csv')
+
+    # plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')  # in paper
+    # plot_evaluations_per_pipe()  # in paper
+
+    # export_pipes_first_replacement_year(os.path.join('output', '2_fcv', 'pipes_repair_year.csv'))
+    # metrics_by_year('output/2_fcv/score.csv')
+    # plot_iterations('output/fcv/all_iter.csv')
+    # plot_spatial_pipes()
+    # plot_spatial_leaks()
+    supply_vs_demand()
     plt.show()
