@@ -226,24 +226,46 @@ def plot_iterations(iterations_file):
 
     df['db'] = 9 - df['so']
     df['db_'] = df['so_'] - df['so'].shift()
-    fig, ax = plt.subplots()
-    temp = df.loc[df['year'] == 1]
-    min_idx, max_idx = temp.index.min(), temp.index.max()
-    plt.axvspan(min_idx, max_idx, color='grey', alpha=0.4, lw=0)
 
-    temp = df.loc[df['year'] == 3]
-    min_idx, max_idx = temp.index.min(), temp.index.max()
-    plt.axvspan(min_idx, max_idx, color='grey', alpha=0.4, lw=0)
+    fig, ax = plt.subplots(figsize=(10, 4))
+    for year in range(1, df['year'].max() + 1):
+        min_idx = df.loc[df['year'] == year].index.min()
+        max_idx = df.loc[df['year'] == year].index.max() + 1
+        if not year % 2 == 0:
+            ax.axvspan(min_idx, max_idx, color='grey', alpha=0.2, lw=0)
 
-    temp = df.loc[df['year'] == 5]
-    min_idx, max_idx = temp.index.min(), temp.index.max()
-    plt.axvspan(min_idx, max_idx, color='grey', alpha=0.4, lw=0)
+        ax.text(0.5 * (max_idx + min_idx) - 3.18, 175, f"Year {year}")
 
-    ax.plot(df['db_'])
+    bar_width = 0.7
+    ax.bar(range(len(df)), df['actions'], width=bar_width, color='#0096C7', align='edge', alpha=1,
+           edgecolor='k', linewidth=0.5)
 
-    fig, axes = plt.subplots(ncols=2)
-    axes[0].plot(df['actions'])
-    axes[1].plot(df['evaluations'])
+    ax_b = ax.twinx()
+    ax_b.plot(np.arange(df.index.min() + (bar_width / 2), df.index.max() + (bar_width / 2) + 1, 1), df['cost'],
+              c='C1', marker='o', markerfacecolor='none', markersize=5)
+
+    ax.set_xlim(df.index.min() - 2, df.index.max() + 2)
+    ax.set_ylabel('Number of investments')
+    ax_b.set_ylabel('Cost (€)')
+    ax.set_xlabel('Iteration')
+    plt.tight_layout()
+
+
+def tank_volume():
+    fig, axes = plt.subplots(nrows=2, ncols=3, sharex=True, sharey=True, figsize=(6, 3))
+    axes = axes.ravel()
+    for y in range(6):
+        wn = all_networks['y' + str(y)]
+        sim = wntr.sim.EpanetSimulator(wn)
+        results = sim.run_sim()
+        tank_vol = results.node['pressure'].loc[:, 'T1_CO']
+        axes[y].plot(range(len(tank_vol)), tank_vol)
+        axes[y].grid()
+        axes[y].set_title(f'Year {int(y)}')
+
+    fig.text(0.5, 0.04, 'Time (hr)', ha='center')
+    fig.text(0.04, 0.5, 'Level (m)', va='center', rotation='vertical')
+    plt.tight_layout()
 
 
 def plot_evaluations_per_pipe():
@@ -293,7 +315,6 @@ def supply_vs_demand():
         actual_dem = actual_dem.sum(axis=1) * 1000
         df = pd.concat([df, pd.DataFrame({'Expected': expected_dem.sum(), 'Actual': actual_dem.sum()}, index=[y])])
 
-    print(df)
     df.plot(kind='bar', stacked=True, color=COLORS, edgecolor='k', width=0.6, figsize=(8, 4), linewidth=0.6)
 
 
@@ -309,16 +330,18 @@ if __name__ == "__main__":
     all_networks = load_networks()
     all_pipes = pd.read_csv('resources/pipes_data.csv')
 
-    # get_leaks_repaired_in_year(all_networks, 1)
-    # get_leaks_summary(export_path='output/fcv/data_for_figures/leaks_summary.csv')
+    metrics_by_year('output/2_fcv/score.csv')  # Figure 4
+    plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')  # Figure 5
 
-    # plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')  # in paper
-    # plot_evaluations_per_pipe()  # in paper
-
+    # Figure 6 - done with GIS
     # export_pipes_first_replacement_year(os.path.join('output', '2_fcv', 'pipes_repair_year.csv'))
-    # metrics_by_year('output/2_fcv/score.csv')
-    # plot_iterations('output/fcv/all_iter.csv')
+
+    plot_evaluations_per_pipe()  # Figure 7
+    plot_iterations('output/fcv/all_iter.csv')  # Figure 8
+
+    tank_volume()  # Figure S2
+
     # plot_spatial_pipes()
     # plot_spatial_leaks()
-    supply_vs_demand()
+    # supply_vs_demand()
     plt.show()
