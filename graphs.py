@@ -318,6 +318,43 @@ def supply_vs_demand():
     df.plot(kind='bar', stacked=True, color=COLORS, edgecolor='k', width=0.6, figsize=(8, 4), linewidth=0.6)
 
 
+def pareto_plot(n):
+    def add_pareto_step(ax, data_col, portion):
+        mask = data_col >= portion
+        min_index = data_col.loc[mask].idxmin()
+        min_row = data_col.loc[min_index]
+        ax.hlines(y=portion, xmin=min_index, xmax=n, linestyle="--", color='k', linewidth=1)
+        ax.vlines(x=min_index, ymin=0, ymax=portion, linestyle="--", color='k', linewidth=1)
+        t = ax.text(n-100, portion - 11, f"{min_index} leakages\n{portion}% of total vol")
+        t.set_bbox(dict(facecolor='w', alpha=0.5, edgecolor='none'))
+
+        return ax
+
+    df = pd.read_csv("all_leaks_summary.csv", index_col=0)
+    df = df.sort_values("total_water_loss", ascending=False)
+    df.reset_index(inplace=True)
+    df["proportional_loss"] = 100 * df['total_water_loss'] / df['total_water_loss'].sum()
+    df["cumm_loss"] = df["proportional_loss"].cumsum()
+
+    fig, ax1 = plt.subplots(figsize=(12, 4))
+    ax1.bar(range(len(df)), df['total_water_loss'], width=1, alpha=0.4)
+
+    ax2 = ax1.twinx()
+    ax2.plot(range(len(df)), df["cumm_loss"], 'r')
+
+    ax2 = add_pareto_step(ax2, df['cumm_loss'], 30)
+    ax2 = add_pareto_step(ax2, df['cumm_loss'], 50)
+    ax2 = add_pareto_step(ax2, df['cumm_loss'], 80)
+
+    ax1.set_xlim(-10, n)
+    ax1.set_ylim(-1, 1650)
+    ax2.set_ylim(0, 102)
+
+    ax1.set_xlabel("Leakage")
+    ax1.set_ylabel('Total water loss at year 0 ($m^{3})$')
+    ax2.set_ylabel('Cumulative % of total losst')
+
+
 if __name__ == "__main__":
     y1_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230606080239_y1')
     y2_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230608092158_y2')
