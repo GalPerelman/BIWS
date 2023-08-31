@@ -352,7 +352,54 @@ def pareto_plot(n):
 
     ax1.set_xlabel("Leakage")
     ax1.set_ylabel('Total water loss at year 0 ($m^{3})$')
-    ax2.set_ylabel('Cumulative % of total losst')
+    ax2.set_ylabel('Cumulative % of total loss')
+
+
+def percentage_pareto_plot():
+    def plot_pareto_step(ax, values, lb, ub):
+        ax.hlines(y=min(values[:lb]), xmin=lb, xmax=ub + 1, linestyle="--", color='k', linewidth=1)
+        ax.vlines(x=ub + 1, ymin=pareto.loc[ub, 'percentage_loss'], ymax=min(values[:lb]), linestyle="--", color='k',
+                  linewidth=1)
+
+        leakges_num = pareto.loc[ub + 1, 'bounds'] - pareto.loc[lb, 'bounds']
+        try:
+            volume = pareto.loc[ub, 'cum_percentage'] - pareto.loc[lb - 1, 'cum_percentage']
+        except KeyError:
+            volume = pareto.loc[ub, 'cum_percentage']
+
+        t = ax.text(lb + 1, min(values[:lb]) + 200, f"{leakges_num} leakages,\n{volume:.1%} volume")
+        return ax
+
+    df = pd.read_csv("all_leaks_summary.csv", index_col=0)
+    df = df.sort_values('total_water_loss', ascending=False)
+    df.reset_index(inplace=True)
+    df['cum_loss'] = df['total_water_loss'].cumsum()
+    total_loss = df['total_water_loss'].sum()
+
+    pareto = pd.DataFrame(index=range(1, 101))
+    pareto['bounds'] = [int(np.ceil(0.01 * i * len(df))) for i in range(1, 101)]
+    pareto = pd.merge(pareto, df['cum_loss'], left_on='bounds', right_index=True, how='left')
+    pareto['cum_percentage'] = pareto['cum_loss'] / total_loss
+    pareto['percentage_loss'] = pareto['cum_loss'] - pareto['cum_loss'].shift()
+    pareto.loc[1, 'percentage_loss'] = pareto['cum_loss'].iloc[0]
+
+    fig, ax1 = plt.subplots(figsize=(9, 4))
+    ax1.bar(range(1, 101), pareto['percentage_loss'], alpha=0.5, align='edge', edgecolor='k')
+    ax1.set_ylabel('Cumulative Loss ($m^{3})$')
+
+    ax1.set_xlabel('Portion from all leakages (%)')
+    ax1 = plot_pareto_step(ax1, pareto['percentage_loss'], 1, 5)
+    ax1 = plot_pareto_step(ax1, pareto['percentage_loss'], 6, 20)
+
+    ax2 = ax1.twinx()
+    ax2.plot(range(1, 101), pareto['cum_percentage'], 'r')
+
+    ax2.set_ylabel('Cumulative normalized Loss (%)', color='r')
+    for tl in ax2.get_yticklabels():
+        tl.set_color('r')
+
+    ax1.set_ylim(0, max(pareto['percentage_loss']) * 1.15)
+    ax1.set_xlim(-1, 101)
 
 
 if __name__ == "__main__":
