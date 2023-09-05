@@ -6,10 +6,8 @@ import pandas as pd
 import itertools
 from itertools import combinations
 from itertools import product
-from collections import Counter
 from copy import deepcopy
 from tqdm import tqdm
-from typing import Dict
 import wntr
 import wntr.network.controls as controls
 
@@ -21,162 +19,122 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCES_DIR = os.path.join(BASE_DIR, 'resources')
 
 
-class ControlChecker:
-    """
-    inp must be cleaned of previous controls
-
-    """
-
-    def __init__(self, inp_path, zone, valves, output_dir):
+class ExhaustiveSearch:
+    def __init__(self, inp_path, zone_name, valves_names, output_dir):
         self.inp_path = inp_path
-        self.zone = zone
-        self.valves = valves
+        self.zone_name = zone_name
+        self.valves_names = valves_names
         self.output_dir = output_dir
 
         self.inp_name = utils.get_file_name_from_path(self.inp_path)[0]
         self.output_dir = utils.validate_dir_path(os.path.join(self.output_dir))
         self.wn = wntr.network.WaterNetworkModel(self.inp_path)
-        self.benchmark = Evaluator([self.wn]).evaluate_scenario()
+        self.set_all_valves_active()
+        self.clear_group_controls()
+        self.build_search_space()
         self.results = {}
 
-    def set_all_elements(self, net, status: str):
-        for v_name in self.valves:
-            net.get_link(v_name).initial_status = status
-        return net
+    def set_all_valves_active(self):
+        for v_name, valve in self.wn.valves():
+            valve._status = "Active"
 
-    def record_results(self, desc, metrics, normalized, total_demand, total_supply):
-        self.results[desc] = metrics
-        self.results[desc]['normalized'] = normalized
-        self.results[desc]['total_demand'] = total_demand
-        self.results[desc]['total_supply'] = total_supply
+    def clear_group_controls(self):
+        """
+        This function clear the existing controls for ALL valves
+        """
+        controls_to_remove = []
+        for cont_name, cont in self.wn.controls():
+            controlled_element = list(cont.requires())[-1]
+            if controlled_element.name in self.wn.valve_name_list:
+                controls_to_remove.append(cont_name)
 
-    def evaluate_controls(self):
-        # all closed
-        net = deepcopy(self.wn)
-        self.set_all_elements(net, 'Closed')
-        metrics, total_demand, total_supply = evaluate(self.wn)
-        norm = sum(utils.normalize_obj(metrics, self.benchmark, best=False).values())
-        self.record_results('all_closed', metrics, norm, total_demand, total_supply)
+        for cont_name in controls_to_remove:
+            self.wn.remove_control(cont_name)
 
-        # iterate all combinations
-        valves_two_settings = [(valve, time) for valve in self.valves for time in ['night', 'morning']]
+    def build_search_space(self):
+        all_configs = list(product([0, 1], repeat=len(self.valves_names)))
+        all_combinations = list(product(all_configs, repeat=len(['day', 'night'])))
+        df = pd.DataFrame(columns=[(x, y) for x in self.valves_names for y in ['day', 'night']],
+                          data=[list(_[0]) + list(_[1]) for _ in all_combinations])
+        return df
 
-        for n in range(1, len(valves_two_settings)):
-            for cvs in tqdm(list(combinations(valves_two_settings, n))):
-                net = deepcopy(self.wn)
+    def search(self):
+        controls_clock = {'day': 7, 'night': 0}
+        controls_status = {0: 'close', 1: 'open'}
 
-                # check if both night and morning are open, if yes, no need to add rule
-                cv_list = [cv for (cv, _) in cvs]
-                cv_count = Counter(cv_list)
-                all_open_cv = [cv for cv, count in cv_count.items() if count == 2]
+        df = self.build_search_space()
+        results = pd.DataFrame()
+        for i, row in tqdm(df.iterrows(), total=len(df)):
+            temp_net = deepcopy(self.wn)
+            for (v_name, period) in df.columns:
+                valve = temp_net.get_link(v_name)
+                status = row[(v_name, period)]
+                start_time = controls_clock[period]  # time when control start
+                condition = controls.TimeOfDayCondition(temp_net, relation='=', threshold=start_time * 3600)
+                control = controls.Control(condition, controls.ControlAction(valve, 'status', status))
+                temp_net.add_control(f'str{v_name}-{period}-{controls_status[status]}', control)
 
-                for cv in all_open_cv:
-                    net.get_link(cv).initial_status = 'Open'
-                for (cv, time) in cvs:
-                    if cv not in all_open_cv:
-                        net = utils.add_control(net, net.get_link(cv), time)
-                metrics, total_demand, total_supply = evaluate(net)
-                norm = sum(utils.normalize_obj(metrics, worse=self.benchmark, best=False).values())
-                self.record_results(cvs, metrics, norm, total_demand, total_supply)
+            evaluator = Evaluator([temp_net])
+            metrics = utils.round_dict(evaluator.evaluate_scenario(), 4)
+            results = pd.concat([results, pd.DataFrame(metrics, index=[i])])
 
-        # all opened
-        net = deepcopy(self.wn)
-        self.set_all_elements(net, 'Open')
-        metrics, total_demand, total_supply = evaluate(self.wn)
-        norm = sum(utils.normalize_obj(metrics, worse=self.benchmark, best=False).values())
-        self.record_results('all_open', metrics, norm, total_demand, total_supply)
-
-        self.export()
-
-    def export(self):
-        results = utils.handle_dict(self.results)
-        results = pd.DataFrame(results)
-        results.T.to_csv(os.path.join(self.output_dir, self.zone + '_valve_control.csv'))
-        # wntr.network.io.write_inpfile(net, os.path.join(self.output_dir, self.zone + results.T.index[-1] + '.inp'))
+        df = pd.merge(df, results, left_index=True, right_index=True)
+        df.to_csv(os.path.join(self.output_dir, f"{self.inp_name}-{self.zone_name}-final.csv"))
 
 
-def evaluate(net):
-    evaluator = Evaluator([net])
-    metrics = utils.round_dict(evaluator.evaluate_scenario(), 4)
-    return metrics, evaluator.get_total_demand(), evaluator.get_total_supply()
+def get_best_config(file_path):
+    df = pd.read_csv(file_path, index_col=0)
+    df = df.rename(columns={col: int(col) for col in ['1', '2', '3', '4', '5', '6', '7', '8', '9']})
+
+    best = {1: df[1].max(), 2: df[2].max(), 3: df[3].min(), 4: df[4].max(), 5: df[5].max(), 6: df[6].max(),
+            7: df[7].min(), 8: df[8].min(), 9: df[9].max()}
+
+    worst = {1: df[1].min(), 2: df[2].min(), 3: df[3].max(), 4: df[4].min(), 5: df[5].min(), 6: df[6].min(),
+             7: df[7].max(), 8: df[8].max(), 9: df[9].min()}
+
+    df['score'] = sum([(df[_] - worst[_]) / (best[_] - worst[_]) for _ in range(1, 10)])
+    df = df.sort_values('score', ascending=False)
+
+    best_config = df.nlargest(1, columns='score')
+    best_config = best_config.drop(['score'] + [_ for _ in range(1, 10)], axis=1)
+    return best_config
 
 
-def construct_controls_final_candidates(exhaustive_results_path: str, n_best: int, output_path: str):
-    res = pd.DataFrame()
-    for subdir, dirs, files in os.walk(exhaustive_results_path):
-        for file in files:
-            if file.endswith('.csv'):
-                df = pd.read_csv(os.path.join(subdir, file), index_col=0)
-                df = df.rename(columns={col: int(col) for col in ['1', '2', '3', '4', '5', '6', '7', '8', '9']})
-                best, worse = utils.get_benchmarks(df)
-                df['N'] = df[range(1, 10)].apply(lambda x: sum(utils.normalize_obj(x.to_dict(), worse, best).values()),
-                                                 axis=1)
+def write_config(inp_path, config):
+    controls_clock = {'day': 7, 'night': 0}
+    controls_status = {0: 'close', 1: 'open'}
 
-                df.sort_values('N', ascending=True)
-                df['year'] = os.path.split(subdir)[1].split('-')[0]
-                df['class'] = file.split('_')[0]
-                df['idx'] = range(1, len(df) + 1)
-                res = pd.concat([res, df.nsmallest(n_best, 'N')])
-    res.to_csv(output_path, index=True)
+    net = wntr.network.WaterNetworkModel(inp_path)
+    for col in config.columns:
+        values = col[1:-1].split(', ')
+        values = [x[1:-1] if x.startswith("'") and x.endswith("'") else x for x in values]
+        actual_tuple = tuple(values)
+        valve_name, period = actual_tuple
 
+        valve = net.get_link(valve_name)
+        status = config[col].values[0]
 
-def get_combinations(candidates: Dict[str, list]):
-    keys = candidates.keys()
-    values = candidates.values()
-    combs = list(product(*values))
-    print(len(combs))
-    return [{key: value for key, value in zip(keys, c)} for c in combs]
+        start_time = controls_clock[period]  # time when control start
+        condition = controls.TimeOfDayCondition(net, relation='=', threshold=start_time * 3600)
+        control = controls.Control(condition, controls.ControlAction(valve, 'status', status))
+        net.add_control(f'str{valve_name}-{period}-{controls_status[status]}', control)
+
+    return net
 
 
-def iterate_all_pumps_combs(networks_path: str, export_path):
-    """ A function to evaluate pumps' models combinations
+if __name__ == "__main__":
+    for y in range(6):
+        inp_path = os.path.join('output', 'fcv', '5_final_networks_adjusted', f'y{y}.inp')
+        valves_file_path = os.path.join(RESOURCES_DIR, 'valves.json')
+        output_path = os.path.join('output', 'fcv', '3_controls', f'y{y}')
+        with open(valves_file_path) as f:
+            valves = json.load(f)
 
-    :param networks_path:   path to dir with 6 networks (one for every year)
-    :param export_path:     path to export results
-    :return:                csv file with objectives value for every pumps combination
-    """
+            for cluster, valves_names in valves.items():
+                print("==========", 'y', y, '-', cluster, "==========")
+                es = ExhaustiveSearch(inp_path, cluster, valves_names, output_path)
+                es.search()
 
-    df = pd.read_csv(os.path.join(RESOURCES_DIR, "pump_candidates.csv"))
-    df['pump_model'] = df['pump_id'] + '-' + df['model']
-
-    models = []
-    groups = df.groupby(by='pump_id')
-    for group, data in groups:
-        models.append(data['pump_model'].tolist())
-
-    pump_combs = (list(itertools.product(*models)))
-    results = pd.DataFrame()
-    for i, c in tqdm(enumerate(pump_combs), total=len(pump_combs)):
-        indicators = replace_pumps_and_evaluate_solution(networks_path, df.loc[df['pump_model'].isin(c)],
-                                                         path=str(i) + '.inp')
-        pumps = df.loc[df['pump_model'].isin(c)]
-        pumps = dict(zip(pumps["pump_id"], pumps["model"]))
-        results = pd.concat([results, pd.DataFrame.from_dict({**indicators, **pumps}, orient='index').T], axis=0)
-        results.to_csv(export_path)
-
-
-def replace_pumps_and_evaluate_solution(networks_path, pumps_to_replace: pd.DataFrame, path):
-    networks = []
-    for file_path in glob.glob(os.path.join(networks_path, '*.inp')):
-        net = wntr.network.WaterNetworkModel(file_path)
-        for i, row in pumps_to_replace.iterrows():
-            net = utils.replace_pumps(net, row["pump_id"], row["model"], row["psv_diameter"], row["psv_setting"])
-
-        networks.append(net)
-    sc = Evaluator(networks)
-    indicators = sc.evaluate_scenario()
-
-    return indicators
-
-
-if __name__ == '__main__':
-    inp_file_path = os.path.join(RESOURCES_DIR, 'networks', 'Greedy_output', 'y1-no-controls.inp')
-    elements_file_path = os.path.join(RESOURCES_DIR, 'valves.json')
-    output_path = os.path.join(BASE_DIR, 'output', 'controls', 'test')
-    with open(elements_file_path) as f:
-        grouped_elements = json.load(f)
-
-        grouped_elements = {'class1': grouped_elements['class1']}
-        for group, elements in grouped_elements.items():
-            cc = ControlChecker(inp_file_path, group, elements, output_path)
-            cc.evaluate_controls()
+    # cfg = get_best_config(os.path.join('output', 'fcv', '3_controls', 'y5', 'y5-class1-final.csv'))
+    # net = write_config("output/fcv/5_final_networks_adjusted/y5.inp", cfg)
+    # wntr.network.io.write_inpfile(net, 'test.inp')
