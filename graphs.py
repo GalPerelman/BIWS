@@ -141,7 +141,7 @@ def metrics_by_year(score_file):
 
 
 def plot_spatial_leaks():
-    all_leaks = pd.read_csv('output/2_fcv/1_greedy_output/20230606080239_y1/leaks.csv', index_col=0)
+    all_leaks = pd.read_csv('output/1_greedy_output/20230606080239_y1/leaks.csv', index_col=0)
     fig, axes = plt.subplots(nrows=1, ncols=2)
 
     temp_net = wntr.network.WaterNetworkModel(os.path.join(SOLUTION_PATH, 'y0.inp'))
@@ -161,7 +161,7 @@ def plot_spatial_leaks():
 
 def plot_spatial_pipes():
     base_net = wntr.network.WaterNetworkModel(os.path.join('resources', 'networks', 'BIWS.inp'))
-    all_actions = pd.read_csv('output/2_fcv/all_actions.csv')
+    all_actions = pd.read_csv('output/all_actions.csv')
     replaced = all_actions.loc[all_actions['action'] == 'pipe']
     replaced = replaced.drop_duplicates(subset='element')
 
@@ -297,7 +297,7 @@ def plot_evaluations_per_pipe():
 
 def export_pipes_first_replacement_year(export_path):
     temp_net = wntr.network.WaterNetworkModel(os.path.join('resources', 'networks', 'BIWS.inp'))  # raw network
-    df = pd.read_csv(os.path.join('output', '2_fcv', 'pipes_repair_year.csv'), index_col=0)
+    df = pd.read_csv(os.path.join('output', 'pipes_repair_year.csv'), index_col=0)
     all_pipes = temp_net.query_link_attribute(attribute='length', link_type=wntr.network.Pipe).rename('length')
     all_pipes = pd.merge(all_pipes, df, left_index=True, right_on='pipe', how='outer')
     all_pipes = all_pipes.fillna(0)
@@ -441,29 +441,29 @@ def compare_two_solutions(sol1, sol2):
 
 
 if __name__ == "__main__":
-    y1_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230606080239_y1')
-    y2_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230608092158_y2')
-    y3_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230610160100_y3')
-    y4_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230611104545_y4')
-    y5_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230613112601_y5')
+    y1_greedy = os.path.join('output', '1_greedy_output', '20230606080239_y1')
+    y2_greedy = os.path.join('output', '1_greedy_output', '20230608092158_y2')
+    y3_greedy = os.path.join('output', '1_greedy_output', '20230610160100_y3')
+    y4_greedy = os.path.join('output', '1_greedy_output', '20230611104545_y4')
+    y5_greedy = os.path.join('output', '1_greedy_output', '20230613112601_y5')
     all_greedy = [y1_greedy, y2_greedy, y3_greedy, y4_greedy, y5_greedy]
 
-    SOLUTION_PATH = os.path.join('output/fcv/9_final_networks_adjusted_new_controls')
+    SOLUTION_PATH = os.path.join('output/8_final_networks_adjusted_new_controls')
     all_networks = load_networks()
     all_pipes = pd.read_csv('resources/pipes_data.csv')
 
-    metrics_by_year('output/fcv/9_final_networks_adjusted_new_controls/score.csv')  # Figure 5
+    metrics_by_year('output/8_final_networks_adjusted_new_controls/score.csv')  # Figure 5
 
-    compare_two_solutions('output/fcv/9_final_networks_adjusted_new_controls/score.csv',
-                          'output/fcv/marsili_et_al_score.csv')  # Figure 6
+    compare_two_solutions('output/8_final_networks_adjusted_new_controls/score.csv',
+                          'output/marsili_et_al_score.csv')  # Figure 6
 
     # plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')  # Figure 7
 
     # Figure 8 - done with GIS
-    # export_pipes_first_replacement_year(os.path.join('output', '2_fcv', 'pipes_repair_year.csv'))
+    # export_pipes_first_replacement_year(os.path.join('output'', 'pipes_repair_year.csv'))
 
     plot_evaluations_per_pipe()  # Figure 9
-    plot_iterations('output/fcv/all_iter.csv')  # Figure 10
+    plot_iterations('output/all_iter.csv')  # Figure 10
 
     tank_volume()  # Figure S2
     plt.show()

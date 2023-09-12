@@ -209,8 +209,8 @@ def clean_results(year: str):
 
 
 if __name__ == "__main__":
-    final_netwotks = os.path.join(OUTPUT_DIR, '2_fcv', '2_final_networks')
-    greedy_output = os.path.join(OUTPUT_DIR, '2_fcv', '1_greedy_output')
+    final_netwotks = os.path.join(OUTPUT_DIR, '2_final_networks')
+    greedy_output = os.path.join(OUTPUT_DIR, '1_greedy_output')
     solution_dir_names = get_solution_dir_names(greedy_output)
     # get_all_actions()
     # for y in ['y1', 'y2', 'y3', 'y4', 'y5']:
@@ -218,8 +218,8 @@ if __name__ == "__main__":
     #     print(y, len(repaired_leaks), len(replaced_pipes_leaks))
 
     sol_builder = BuildSolution(base_networks_path=os.path.join(RESOURCES_DIR, 'networks', 'Base-Pumps'),
-                                solution_file=os.path.join('output', 'fcv', 'all_actions_and_optional_completions.csv'),
-                                output_dir=os.path.join('output', 'fcv', '5_final_networks_adjusted'),
+                                solution_file=os.path.join('output', 'all_actions_and_optional_completions.csv'),
+                                output_dir=os.path.join('output', '5_final_networks_adjusted'),
                                 cumulative_budget={0: 0, 1: 472917, 2: 650000, 3: 650000, 4: 650000, 5: 650000}
                                 )
 
