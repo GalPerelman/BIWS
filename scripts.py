@@ -6,7 +6,6 @@ import pandas as pd
 import preprocess
 import metrics
 from greedy import Greedy
-from exhaustive import ControlChecker
 import utils
 
 pd.set_option('display.max_columns', 500)
@@ -89,23 +88,15 @@ if __name__ == "__main__":
     # greedy.leaks.to_csv(os.path.join(output_path, 'leaks.csv'))
     # greedy.start()
 
-    """ compare soultions """
-    comp_solution = "G:/My Drive/3_Academy/P.hd/2_Research/Projects/BIWS-Comp/Code/postprocess/v2/greedy/finalization"
-    score = utils.round_dict(metrics.evaluate_scenario(comp_solution), 3)
-    print(f"Battle score: {score}")
-    print('===============================================================================================')
-
-    paper_solution = "C:/Users/User/Documents/GitHub/BIWS-Paper/output/fcv/2_final_networks"
-    score = utils.round_dict(metrics.evaluate_scenario(paper_solution), 3)
-    print(f"Paper score: {score}")
-    print('===============================================================================================')
-
-    # solution_path = "output/1_fcv/4_final_networks_controls/y0.inp"
-    # score = metrics.evaluate_single_net(solution_path)
-    # score = utils.round_dict(score, 3)
-    # print(score)
+    """ compare solutions """
+    # paper_solution_adjusted_controls = "C:/Users/User/Documents/GitHub/BIWS-Paper/output/fcv/9_final_networks_adjusted_new_controls"
+    # score = utils.round_dict(metrics.evaluate_scenario(paper_solution_adjusted_controls), 3)
+    # print(f"Perelman et al.: {score}")
     #
-    # solution_path = "output/2_fcv/2_final_networks/y0.inp"
-    # score = metrics.evaluate_single_net(solution_path)
-    # score = utils.round_dict(score, 3)
-    # print(score)
+    # marsili_et_al = "C:/Users/User/OneDrive - Technion/2_Knowledge/4_Publications/BIWS-winners"
+    # score = utils.round_dict(metrics.evaluate_scenario(marsili_et_al), 3)
+    # print(f"Marsili et al.: {score}")
+
+    pass
+
+
