@@ -218,7 +218,7 @@ if __name__ == "__main__":
     #     print(y, len(repaired_leaks), len(replaced_pipes_leaks))
 
     sol_builder = BuildSolution(base_networks_path=os.path.join(RESOURCES_DIR, 'networks', 'Base-Pumps'),
-                                solution_file=os.path.join('output', 'fcv', 'all_actions_with_more_optional_actions.csv'),
+                                solution_file=os.path.join('output', 'fcv', 'all_actions_and_optional_completions.csv'),
                                 output_dir=os.path.join('output', 'fcv', '5_final_networks_adjusted'),
                                 cumulative_budget={0: 0, 1: 472917, 2: 650000, 3: 650000, 4: 650000, 5: 650000}
                                 )
