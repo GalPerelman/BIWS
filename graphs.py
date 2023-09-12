@@ -7,7 +7,9 @@ import wntr
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.ticker import FormatStrFormatter
+
 import viswaternet as vis
 
 import utils
@@ -134,8 +136,8 @@ def metrics_by_year(score_file):
         # axes[i].yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
         axes[i].grid()
 
-    fig.text(0.5, 0.04, 'Year', ha='center')
-    plt.subplots_adjust(left=0.1, right=0.95, wspace=0.25, hspace=0.35)
+    fig.text(0.5, 0.03, 'Year', ha='center')
+    plt.subplots_adjust(left=0.1, right=0.95, top=0.95, wspace=0.25, hspace=0.35)
 
 
 def plot_spatial_leaks():
@@ -402,6 +404,42 @@ def percentage_pareto_plot():
     ax1.set_xlim(-1, 101)
 
 
+def compare_two_solutions(sol1, sol2):
+    df1 = pd.read_csv(sol1, index_col=0)
+    df2 = pd.read_csv(sol2, index_col=0)
+
+    mat = (df2 - df1) / df2
+    mat.iloc[:, [2, 6, 7]] *= -1
+    vmin, vmax = -1, 1
+
+    fig, ax = plt.subplots()
+    cax = ax.matshow(mat, cmap='bwr', vmin=vmin, vmax=vmax)
+
+    divider = make_axes_locatable(ax)
+    cax1 = divider.append_axes("right", size="5%", pad=0.1)
+
+    cbar = plt.colorbar(cax, cax=cax1, orientation='vertical')
+    cbar.set_ticks([vmin, vmax])
+    cbar.set_ticklabels(['Perelman et al.', 'Marsili et al.'], rotation=-45, va='center')
+
+    ax.tick_params(labelbottom=True, labeltop=False, top=False)
+    ax.set_xticks(np.arange(mat.shape[1]))
+    ax.set_yticks(np.arange(mat.shape[0]))
+    ax.set_xticklabels(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+    ax.set_yticklabels(['0', '1', '2', '3', '4', '5', 'Total'])
+
+    ax.set_xticks(np.arange(-.5, mat.shape[1] - 0.5, 1), minor=True)
+    ax.set_yticks(np.arange(-.5, mat.shape[0] - 0.5, 1), minor=True)
+    ax.grid(which='minor', color='k', linestyle='-')
+
+    for i in range(mat.shape[0]):
+        for j in range(mat.shape[1]):
+            text = ax.text(j, i, f"{mat.iloc[i, j]:.1%}", ha="center", va="center", color="k", fontsize=9)
+
+    ax.set_xlabel('Indicator')
+    ax.set_ylabel('Year')
+
+
 if __name__ == "__main__":
     y1_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230606080239_y1')
     y2_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230608092158_y2')
@@ -410,22 +448,22 @@ if __name__ == "__main__":
     y5_greedy = os.path.join('output', 'fcv', '1_greedy_output', '20230613112601_y5')
     all_greedy = [y1_greedy, y2_greedy, y3_greedy, y4_greedy, y5_greedy]
 
-    SOLUTION_PATH = os.path.join('output/fcv/2_final_networks')
+    SOLUTION_PATH = os.path.join('output/fcv/9_final_networks_adjusted_new_controls')
     all_networks = load_networks()
     all_pipes = pd.read_csv('resources/pipes_data.csv')
 
-    metrics_by_year('output/2_fcv/score.csv')  # Figure 4
-    plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')  # Figure 5
+    metrics_by_year('output/fcv/9_final_networks_adjusted_new_controls/score.csv')  # Figure 5
 
-    # Figure 6 - done with GIS
+    compare_two_solutions('output/fcv/9_final_networks_adjusted_new_controls/score.csv',
+                          'output/fcv/marsili_et_al_score.csv')  # Figure 6
+
+    # plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')  # Figure 7
+
+    # Figure 8 - done with GIS
     # export_pipes_first_replacement_year(os.path.join('output', '2_fcv', 'pipes_repair_year.csv'))
 
-    plot_evaluations_per_pipe()  # Figure 7
-    plot_iterations('output/fcv/all_iter.csv')  # Figure 8
+    plot_evaluations_per_pipe()  # Figure 9
+    plot_iterations('output/fcv/all_iter.csv')  # Figure 10
 
     tank_volume()  # Figure S2
-
-    # plot_spatial_pipes()
-    # plot_spatial_leaks()
-    # supply_vs_demand()
     plt.show()
