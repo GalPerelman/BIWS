@@ -29,27 +29,10 @@ class ExhaustiveSearch:
         self.inp_name = utils.get_file_name_from_path(self.inp_path)[0]
         self.output_dir = utils.validate_dir_path(os.path.join(self.output_dir))
         self.wn = wntr.network.WaterNetworkModel(self.inp_path)
-        self.set_all_valves_active()
-        self.clear_group_controls()
+        self.wn = set_all_valves_active(self.wn)
+        self.wn = clear_group_controls(self.wn)
         self.build_search_space()
         self.results = {}
-
-    def set_all_valves_active(self):
-        for v_name, valve in self.wn.valves():
-            valve._status = "Active"
-
-    def clear_group_controls(self):
-        """
-        This function clear the existing controls for ALL valves
-        """
-        controls_to_remove = []
-        for cont_name, cont in self.wn.controls():
-            controlled_element = list(cont.requires())[-1]
-            if controlled_element.name in self.wn.valve_name_list:
-                controls_to_remove.append(cont_name)
-
-        for cont_name in controls_to_remove:
-            self.wn.remove_control(cont_name)
 
     def build_search_space(self):
         all_configs = list(product([0, 1], repeat=len(self.valves_names)))
@@ -82,6 +65,28 @@ class ExhaustiveSearch:
         df.to_csv(os.path.join(self.output_dir, f"{self.inp_name}-{self.zone_name}-final.csv"))
 
 
+def set_all_valves_active(wn: wntr.network.WaterNetworkModel):
+    for v_name, valve in wn.valves():
+        valve._status = "Active"
+    return wn
+
+
+def clear_group_controls(wn: wntr.network.WaterNetworkModel):
+    """
+    This function clear the existing controls for ALL valves
+    """
+    controls_to_remove = []
+    for cont_name, cont in wn.controls():
+        controlled_element = list(cont.requires())[-1]
+        if controlled_element.name in wn.valve_name_list:
+            controls_to_remove.append(cont_name)
+
+    for cont_name in controls_to_remove:
+        wn.remove_control(cont_name)
+
+    return wn
+
+
 def get_best_config(file_path):
     df = pd.read_csv(file_path, index_col=0)
     df = df.rename(columns={col: int(col) for col in ['1', '2', '3', '4', '5', '6', '7', '8', '9']})
@@ -100,26 +105,43 @@ def get_best_config(file_path):
     return best_config
 
 
-def write_config(inp_path, config):
+def set_config_to_net(wn, config):
     controls_clock = {'day': 7, 'night': 0}
     controls_status = {0: 'close', 1: 'open'}
 
-    net = wntr.network.WaterNetworkModel(inp_path)
     for col in config.columns:
         values = col[1:-1].split(', ')
         values = [x[1:-1] if x.startswith("'") and x.endswith("'") else x for x in values]
         actual_tuple = tuple(values)
         valve_name, period = actual_tuple
 
-        valve = net.get_link(valve_name)
+        valve = wn.get_link(valve_name)
         status = config[col].values[0]
 
         start_time = controls_clock[period]  # time when control start
-        condition = controls.TimeOfDayCondition(net, relation='=', threshold=start_time * 3600)
+        condition = controls.TimeOfDayCondition(wn, relation='=', threshold=start_time * 3600)
         control = controls.Control(condition, controls.ControlAction(valve, 'status', status))
-        net.add_control(f'str{valve_name}-{period}-{controls_status[status]}', control)
+        try:
+            # if a control for the same valve and period is already set (from a different cluster)
+            # print the controls so user can check there are no conflicts
+            wn.add_control(f'{valve_name}-{period}-{controls_status[status]}', control)
+        except ValueError:
+            print(f'{valve_name}-{period}-{controls_status[status]}')
 
-    return net
+    return wn
+
+
+def write_all_best_cfg(controls_output_dir: str, base_networks_dir: str, output_dir: str):
+    for y in range(6):
+        inp_path = os.path.join(base_networks_dir, f'y{y}.inp')
+        wn = wntr.network.WaterNetworkModel(inp_path)
+        year_controls_dir = os.path.join(controls_output_dir, f'y{y}') + "/*.csv"
+        for file in glob.glob(year_controls_dir):
+            cfg = get_best_config(file)
+            wn = set_config_to_net(wn, cfg)
+
+        output_net_path = os.path.join(output_dir, f'y{y}.inp')
+        wntr.network.io.write_inpfile(wn, output_net_path)
 
 
 if __name__ == "__main__":
@@ -135,6 +157,6 @@ if __name__ == "__main__":
                 es = ExhaustiveSearch(inp_path, cluster, valves_names, output_path)
                 es.search()
 
-    # cfg = get_best_config(os.path.join('output', 'fcv', '3_controls', 'y5', 'y5-class1-final.csv'))
-    # net = write_config("output/fcv/5_final_networks_adjusted/y5.inp", cfg)
-    # wntr.network.io.write_inpfile(net, 'test.inp')
+    write_all_best_cfg(os.path.join('output', 'fcv', '3_controls'),
+                       os.path.join('output', 'fcv', '5_final_networks_adjusted'),
+                       os.path.join('output', 'fcv', '9_final_networks_adjusted_new_controls'))
