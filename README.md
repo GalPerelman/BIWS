@@ -1,2 +1,10 @@
 # BIWS
 Battle Of Intermittent Water Supply
+
+This repository contains the data and code for the paper:
+### Greedy Budget Allocation for Optimizing the Performance of Water Distribution Systems Under Intermittent Supply Conditions
+
+Gal Perelman, Lu Xing, Mashor Housh, Venu Kandiah, Barak Fishbain, and Ehsan Shafiee
+
+### Abstract
+Intermittent water supply is a prevalent strategy employed in water distribution systems (WDS) facing deteriorating conditions. However, this approach can result in several drawbacks, including insufficient supply, pressure drops, water losses due to leakages, and unequal service levels. Furthermore, these issues often exacerbate when consumers establish private storage facilities and increase the peak demand, which leads to a feedback loop of worsening conditions. Thus, when a budget is available, restoring the system functionality as fast as possible is crucial. The current study presents a method to optimize the rehabilitation of intermittent water supply by improving system design through investments and by operational control settings. The method was developed for the challenge presented in the Battle of the Intermittent Water Supply (BIWS), where the network performance is evaluated through nine different objectives over five years of planning and rehabilitation horizon. The proposed method is based on a greedy optimization approach that was specifically tailored to the challenge of optimizing WDS under extreme hydraulic conditions. To overcome the formidable computational burden in the BIWS challenge, several heuristics are presented for reducing the search space. The results obtained reflect a dramatic improvement in the network performance, with 97.8% of the consumers having continuous supply and water loss reduced from 47% to 32% of the total inflow. We also present a generic greedy approach that allows it to be applied to any water network for various decision-making problems.
