@@ -1,6 +1,6 @@
 import os
 import glob
-
+import json
 import numpy as np
 import pandas as pd
 import wntr
@@ -8,12 +8,17 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.ticker as mtick
+import matplotlib.patheffects as PathEffects
 from matplotlib.ticker import FormatStrFormatter
 
 import viswaternet as vis
 
 import utils
 from metrics import Evaluator
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+RESOURCES_DIR = os.path.join(BASE_DIR, 'resources')
 
 pd.set_option("display.precision", 3)
 COLORS = ['#94D1FE', '#3288c7', '#1d72af', '#12476d', '#0a1c29']
@@ -440,6 +445,72 @@ def compare_two_solutions(sol1, sol2):
     ax.set_ylabel('Year')
 
 
+def get_valve_control(net: wntr.network.WaterNetworkModel, valve_name: str):
+    v_controls = {}
+
+    for cont_name, cont in net.controls():
+        controlled_element = list(cont.requires())[-1]
+
+        if controlled_element.name == valve_name:
+            time_of_the_day = int(cont.condition._threshold / 3600)
+            new_value = cont.actions()[0]._value
+            v_controls[time_of_the_day] = new_value
+
+    return v_controls
+
+
+def plot_valves_control(net_name):
+    net = all_networks[net_name]
+    fig, axes = plt.subplots(nrows=8, sharex=True, figsize=(8, 8))
+
+    dem_pat = net.patterns['P0'].multipliers
+    total_base_demand = 202.77  # L/s
+    total_base_demand *= (3600 / 1000)  # CMH
+
+    axes[0].bar(range(len(dem_pat)), dem_pat, color='dodgerblue', edgecolor='k', linewidth=0.4, zorder=10)
+    axes[0].xaxis.set_major_locator(mtick.MultipleLocator(12))
+    axes[0].set_ylabel("Demand\npattern")
+    axes[0].grid(True, zorder=0)
+
+    pe = [PathEffects.Stroke(linewidth=6, foreground='k'),
+          PathEffects.Stroke(foreground='k'),
+          PathEffects.Normal()]
+
+    day_start = [_ for _ in range(168) if _ % 24 == 7]
+    night_start = [_ for _ in range(169) if _ % 24 == 0]
+
+    with open(VALVES_CLUSTERS_PATH) as f:
+        valve_clusters = json.load(f)
+
+        for i, (cluster, valves_names) in enumerate(valve_clusters.items()):
+            i += 1
+            for j, v in enumerate(valves_names):
+
+                axes[i].hlines([j], 0, 168, linewidth=5, color='w', path_effects=pe)
+
+                v_controls = get_valve_control(net, v)
+                for clock_time, status in v_controls.items():
+                    if clock_time == 0 and status == 1:
+                        axes[i].hlines(np.repeat(j, len(night_start)-1), night_start[:-1], day_start, linewidth=5, colors='k')
+                    if clock_time == 7 and status == 1:
+                        axes[i].hlines(np.repeat(j, len(day_start)), day_start, night_start[1:], linewidth=5, colors='k')
+
+            axes[i].set_yticks([i for i in range(len(valves_names))])
+            axes[i].set_yticklabels(valves_names)
+
+            axes[i].xaxis.set_major_locator(mtick.MultipleLocator(12))
+            axes[i].grid()
+
+            axes[i].set_xlim(-2, 170)
+            axes[i].set_ylim(-0.5, len(valves_names))
+
+            axes[i].set_ylabel(cluster, labelpad=10)
+
+    fig.align_ylabels()
+    plt.subplots_adjust(bottom=0.05, top=0.98, left=0.15, right=0.95, hspace=0.22)
+    plt.savefig(f'{net_name}_valves.png')
+
+
 if __name__ == "__main__":
     y1_greedy = os.path.join('output', '1_greedy_output', '20230606080239_y1')
     y2_greedy = os.path.join('output', '1_greedy_output', '20230608092158_y2')
@@ -448,22 +519,29 @@ if __name__ == "__main__":
     y5_greedy = os.path.join('output', '1_greedy_output', '20230613112601_y5')
     all_greedy = [y1_greedy, y2_greedy, y3_greedy, y4_greedy, y5_greedy]
 
-    SOLUTION_PATH = os.path.join('output/8_final_networks_adjusted_new_controls')
+    SOLUTION_PATH = os.path.join('output/7_final_networks_post_controls')
+    VALVES_CLUSTERS_PATH = os.path.join(RESOURCES_DIR, 'valves.json')
+
     all_networks = load_networks()
     all_pipes = pd.read_csv('resources/pipes_data.csv')
 
     metrics_by_year('output/8_final_networks_adjusted_new_controls/score.csv')  # Figure 5
 
-    compare_two_solutions('output/8_final_networks_adjusted_new_controls/score.csv',
+    compare_two_solutions('output/7_final_networks_post_controls/score.csv',
                           'output/marsili_et_al_score.csv')  # Figure 6
 
-    # plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')  # Figure 7
+    plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')  # Figure 7
 
     # Figure 8 - done with GIS
-    # export_pipes_first_replacement_year(os.path.join('output'', 'pipes_repair_year.csv'))
+    export_pipes_first_replacement_year(os.path.join('output', 'pipes_repair_year.csv'))
 
     plot_evaluations_per_pipe()  # Figure 9
     plot_iterations('output/all_iter.csv')  # Figure 10
 
     tank_volume()  # Figure S2
+
+    # Figures S3-S8
+    for _ in range(6):
+        plot_valves_control(f'y{_}')
+
     plt.show()
