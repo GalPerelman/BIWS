@@ -364,9 +364,11 @@ def pareto_plot(n):
 
 def percentage_pareto_plot():
     def plot_pareto_step(ax, values, lb, ub):
-        ax.hlines(y=min(values[:lb]), xmin=lb, xmax=ub + 1, linestyle="--", color='k', linewidth=1)
-        ax.vlines(x=ub + 1, ymin=pareto.loc[ub, 'percentage_loss'], ymax=min(values[:lb]), linestyle="--", color='k',
+        ax.hlines(y=min(values[:lb]), xmin=lb, xmax=ub, linestyle="--", color='k', linewidth=1)
+        ax.vlines(x=ub, ymin=pareto.loc[ub, 'percentage_loss'], ymax=min(values[:lb]), linestyle="--", color='k',
                   linewidth=1)
+
+        r = 0 if lb == 1 else lb - 1  # for the text string describing percentage of all leakages at the current step
 
         leakges_num = pareto.loc[ub + 1, 'bounds'] - pareto.loc[lb, 'bounds']
         try:
@@ -374,10 +376,10 @@ def percentage_pareto_plot():
         except KeyError:
             volume = pareto.loc[ub, 'cum_percentage']
 
-        t = ax.text(lb + 1, min(values[:lb]) + 200, f"{leakges_num} leakages,\n{volume:.1%} volume")
+        t = ax.text(lb + 1, min(values[:lb]) + 200, f"{leakges_num} ({(ub-r)/100:.0%}) leakages \n{volume:.1%} volume")
         return ax
 
-    df = pd.read_csv("all_leaks_summary.csv", index_col=0)
+    df = pd.read_csv(os.path.join(RESOURCES_DIR, 'all_leaks_summary.csv'), index_col=0)
     df = df.sort_values('total_water_loss', ascending=False)
     df.reset_index(inplace=True)
     df['cum_loss'] = df['total_water_loss'].cumsum()
@@ -391,7 +393,13 @@ def percentage_pareto_plot():
     pareto.loc[1, 'percentage_loss'] = pareto['cum_loss'].iloc[0]
 
     fig, ax1 = plt.subplots(figsize=(9, 4))
-    ax1.bar(range(1, 101), pareto['percentage_loss'], alpha=0.5, align='edge', edgecolor='k')
+    ax1.bar(range(1, 101), pareto['percentage_loss'], alpha=0.5, align='center', edgecolor='k')
+
+    # declare x ticks locations and labels - every 5% and starting with 1
+    x = [_ for _ in np.arange(0, 105, 5)]
+    x[0] = 1
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(x)
     ax1.set_ylabel('Cumulative Loss ($m^{3})$')
 
     ax1.set_xlabel('Portion from all leakages (%)')
@@ -407,6 +415,7 @@ def percentage_pareto_plot():
 
     ax1.set_ylim(0, max(pareto['percentage_loss']) * 1.15)
     ax1.set_xlim(-1, 101)
+    plt.subplots_adjust(bottom=0.12, top=0.95)
 
 
 def compare_two_solutions(sol1, sol2):
@@ -525,8 +534,10 @@ if __name__ == "__main__":
     all_networks = load_networks()
     all_pipes = pd.read_csv('resources/pipes_data.csv')
 
-    metrics_by_year('output/8_final_networks_adjusted_new_controls/score.csv')  # Figure 5
+    percentage_pareto_plot()  # Figure 4
 
+    metrics_by_year('output/8_final_networks_adjusted_new_controls/score.csv')  # Figure 5
+    
     compare_two_solutions('output/7_final_networks_post_controls/score.csv',
                           'output/marsili_et_al_score.csv')  # Figure 6
 
