@@ -21,7 +21,7 @@ if __name__ == "__main__":
     """ Run 1st year greedy """
     # The first year budget is only 500000 because of pumps replacements
     # output_path = os.path.join(OUTPUT_DIR, '1_greedy_output', time.strftime("%Y%m%d%H%M%S") + '_y1')
-    # inp = os.path.join(RESOURCES_DIR, "networks", "2_Input-FCV",  "y1.inp")
+    # inp = os.path.join(RESOURCES_DIR, "networks", "Input-greedy",  "y1.inp")
     # greedy = Greedy(inp, output_dir=output_path, budget=500000, actions_ratio=0.3, hgl_threshold=0.003, n_leaks=1000,
     #                 reevaluate_ratio=0.03, total_run_time=24, hours_duration=168)
     # greedy.pipes.to_csv(os.path.join(output_path, 'pipes.csv'))
@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     """ Run 2nd year greedy """
     # output_path = os.path.join(OUTPUT_DIR, '1_greedy_output', time.strftime("%Y%m%d%H%M%S") + '_y2')
-    # inp = os.path.join(RESOURCES_DIR, "networks", "2_Input-FCV", "y2.inp")
+    # inp = os.path.join(RESOURCES_DIR, "networks", "Input-greedy", "y2.inp")
     # greedy = Greedy(inp, output_dir=output_path, budget=670000,
     #                 actions_ratio=0.3, hgl_threshold=0.003, n_leaks=900, reevaluate_ratio=0.03,
     #                 total_run_time=24, hours_duration=168)
@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
     """ Run 3rd year greedy """
     # output_path = os.path.join(OUTPUT_DIR, '1_greedy_output', time.strftime("%Y%m%d%H%M%S") + '_y3')
-    # inp = os.path.join(RESOURCES_DIR, "networks", "2_Input-FCV", "y3.inp")
+    # inp = os.path.join(RESOURCES_DIR, "networks", "Input-greedy", "y3.inp")
     # greedy = Greedy(inp, output_dir=output_path, budget=670000,
     #                 actions_ratio=0.3, hgl_threshold=0.003, n_leaks=900, reevaluate_ratio=0.03,
     #                 total_run_time=24, hours_duration=168)
@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     """ Run 4th year greedy """
     # output_path = os.path.join(OUTPUT_DIR, '1_greedy_output', time.strftime("%Y%m%d%H%M%S") + '_y4')
-    # inp = os.path.join(RESOURCES_DIR, "networks", "2_Input-FCV", "y4.inp")
+    # inp = os.path.join(RESOURCES_DIR, "networks", "Input-greedy", "y4.inp")
     # greedy = Greedy(inp, output_dir=output_path, budget=670000,
     #                 actions_ratio=0.3, hgl_threshold=0.003, n_leaks=900, reevaluate_ratio=0.03,
     #                 total_run_time=24, hours_duration=168)
@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     """ Run 5th year greedy """
     # output_path = os.path.join(OUTPUT_DIR, '1_greedy_output', time.strftime("%Y%m%d%H%M%S") + '_y5')
-    # inp = os.path.join(RESOURCES_DIR, "networks", "2_Input-FCV", "y5.inp")
+    # inp = os.path.join(RESOURCES_DIR, "networks", "Input-greedy", "y5.inp")
     # greedy = Greedy(inp, output_dir=output_path, budget=670000,
     #                 actions_ratio=0.3, hgl_threshold=0.003, n_leaks=900, reevaluate_ratio=0.03,
     #                 total_run_time=24, hours_duration=168)
@@ -89,13 +89,13 @@ if __name__ == "__main__":
     # greedy.start()
 
     """ compare solutions """
-    # paper_solution_adjusted_controls = "C:/Users/User/Documents/GitHub/BIWS-Paper/output/8_final_networks_adjusted_new_controls"
-    # score = utils.round_dict(metrics.evaluate_scenario(paper_solution_adjusted_controls), 3)
-    # print(f"Perelman et al.: {score}")
-    #
-    # marsili_et_al = "C:/Users/User/OneDrive - Technion/2_Knowledge/4_Publications/BIWS-winners"
-    # score = utils.round_dict(metrics.evaluate_scenario(marsili_et_al), 3)
-    # print(f"Marsili et al.: {score}")
+    perelman_et_al = "output/7_final_networks_post_controls"
+    score = utils.round_dict(metrics.evaluate_scenario(perelman_et_al), 3)
+    print(f"Perelman et al.: {score}")
+
+    marsili_et_al = "output/8_Marsili_et_al"
+    score = utils.round_dict(metrics.evaluate_scenario(marsili_et_al), 3)
+    print(f"Marsili et al.: {score}")
 
     pass
 

@@ -1,43 +1,43 @@
 {
-	"class1": [
+	"Cluster 1": [
 			"V_TR",
 			"CV8",
 			"CV3",
 			"CV12"
 			],
-	"class2": [
+	"Cluster 2": [
 			"V_CO",
 			"V_MV1",
 			"V_MV2",
 			"CV7",
 			"CV9"
 			],
-	"class3": [
+	"Cluster 3": [
 			"V_CO",
 			"V_G1",
 			"V_G2",
 			"V_G3"
 			],
-	"class4": [
+	"Cluster 4": [
 			"V_CO",
 			"V_PE1",
 			"V_PE2",
 			"CV3"
 			],
-	"class5": [
+	"Cluster 5": [
 			"V_CO",
 			"V_MO1",
 			"V_MO2",
 			"V_MO3",
 			"V_MO4"
 			],
-	"class6": [
+	"Cluster 6": [
 			"CV1",
 			"CV6",
 			"CV12",
 			"V_TR"
 			],
-	"class7": [
+	"Cluster 7": [
 		"V_LL_1",
 		"CV4",
 		"CV5"

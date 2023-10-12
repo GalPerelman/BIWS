@@ -146,9 +146,9 @@ def write_all_best_cfg(controls_output_dir: str, base_networks_dir: str, output_
 
 if __name__ == "__main__":
     for y in range(6):
-        inp_path = os.path.join('output', 'fcv', '5_final_networks_adjusted', f'y{y}.inp')
+        inp_path = os.path.join('output', '5_final_networks_post', f'y{y}.inp')
         valves_file_path = os.path.join(RESOURCES_DIR, 'valves.json')
-        output_path = os.path.join('output', 'fcv', '3_controls', f'y{y}')
+        output_path = os.path.join('output', '3_controls_search', f'y{y}')
         with open(valves_file_path) as f:
             valves = json.load(f)
 
@@ -157,6 +157,6 @@ if __name__ == "__main__":
                 es = ExhaustiveSearch(inp_path, cluster, valves_names, output_path)
                 es.search()
 
-    write_all_best_cfg(os.path.join('output', 'fcv', '3_controls'),
-                       os.path.join('output', 'fcv', '5_final_networks_adjusted'),
-                       os.path.join('output', 'fcv', '9_final_networks_adjusted_new_controls'))
+    write_all_best_cfg(os.path.join('output', 'fcv', '3_controls_search'),
+                       os.path.join('output', 'fcv', '5_final_networks_post'),
+                       os.path.join('output', 'fcv', '7_final_networks_post_controls'))
