@@ -359,9 +359,9 @@ class Evaluator:
 
 
 def evaluate_scenario(path_to_networks):
-    """ evaluate a complete scenario - 6 networks
-        path_to_networks - path to a directory with 6 networks
-        networks names should be y<i>.inp such that <i> represent the year
+    """ evaluate a complete scenario - 6 networks.
+        path_to_networks - path to a directory with 6 networks.
+        networks names should be y<i>.inp such that <i> represent the year.
     """
     import warnings
     warnings.filterwarnings('ignore')
