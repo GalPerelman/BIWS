@@ -190,8 +190,10 @@ def clean_results(year: str):
     leaks = df.loc[df['action'] == 'leak']
 
     # step 1 - check for duplicate pipes
-    pipes = pipes.sort_values(by='new_diameter_m')
+    pipes = pipes.sort_values(['element', 'new_diameter_m'])
+    pipes['cumulative_pipe_cost'] = pipes.groupby('element')['d_cost'].cumsum()
     pipes = pipes.drop_duplicates(subset='element', keep="last")
+    pipes['new_diameter_mm'] = 1000 * pipes['new_diameter_m']
 
     # add pipes length
     pipes_data = pd.read_csv(os.path.join(RESOURCES_DIR, 'pipes_data.csv'))
@@ -199,11 +201,12 @@ def clean_results(year: str):
 
     # step 2 - check for leaks repairs in replaced pipes
     leaks_data = pd.read_csv(os.path.join(RESOURCES_DIR, 'preprocess', 'leaks_preprocess.csv'))
-    leaks = pd.merge(leaks, leaks_data[['Leak_id', 'Link']], left_on='element', right_on='Leak_id')
+    leaks = pd.merge(leaks, leaks_data[['Leak_id', 'Link', 'Length']], left_on='element', right_on='Leak_id')
     repaired_leaks = leaks.loc[~leaks['Link'].isin(pipes['element'])]
     replaced_pipes_leaks = leaks.loc[leaks['Link'].isin(pipes['element'])]
 
     actions = pd.concat([pipes, leaks], axis=0)
+    actions['final_cost'] = np.where(actions['action'] == 'pipe', actions['cumulative_pipe_cost'], actions['d_cost'])
     all_repaired_leaks = pd.concat([repaired_leaks, replaced_pipes_leaks], axis=0)
     return actions, pipes, all_repaired_leaks, repaired_leaks, replaced_pipes_leaks
 
@@ -212,10 +215,12 @@ if __name__ == "__main__":
     final_netwotks = os.path.join(OUTPUT_DIR, '2_final_networks')
     greedy_output = os.path.join(OUTPUT_DIR, '1_greedy_output')
     solution_dir_names = get_solution_dir_names(greedy_output)
-    # get_all_actions()
-    # for y in ['y1', 'y2', 'y3', 'y4', 'y5']:
-    #     actions, pipes, all_repaired_leaks, repaired_leaks, replaced_pipes_leaks = clean_results(y)
-    #     print(y, len(repaired_leaks), len(replaced_pipes_leaks))
+
+    # export final solution
+    for y in ['y1', 'y2', 'y3', 'y4', 'y5']:
+        actions, pipes, all_repaired_leaks, repaired_leaks, replaced_pipes_leaks = clean_results(y)
+        pipes[['element', 'new_diameter_mm', 'cumulative_pipe_cost']].to_csv(f"pipes-{y}.csv")
+        repaired_leaks[['Link', 'Length', 'd_cost']].to_csv(f"leaks-{y}.csv")
 
     sol_builder = BuildSolution(base_networks_path=os.path.join(RESOURCES_DIR, 'networks', 'Base-Pumps'),
                                 solution_file=os.path.join('output', 'all_actions_and_optional_completions.csv'),
