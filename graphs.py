@@ -12,8 +12,6 @@ import matplotlib.ticker as mtick
 import matplotlib.patheffects as PathEffects
 from matplotlib.ticker import FormatStrFormatter
 
-import viswaternet as vis
-
 import utils
 from metrics import Evaluator
 
@@ -419,6 +417,10 @@ def percentage_pareto_plot():
 
 
 def compare_two_solutions(sol1, sol2):
+    """
+    'output/7_final_networks_post_controls/score.csv',
+    'output/marsili_et_al_score.csv'
+    """
     df1 = pd.read_csv(sol1, index_col=0)
     df2 = pd.read_csv(sol2, index_col=0)
 
@@ -452,6 +454,53 @@ def compare_two_solutions(sol1, sol2):
 
     ax.set_xlabel('Indicator')
     ax.set_ylabel('Year')
+
+
+def compare_three_teams():
+    fig, axes = plt.subplots(nrows=7, ncols=9, figsize=(11, 6))
+    df1 = pd.read_csv('output/7_final_networks_post_controls/score.csv', index_col=0)
+    df3 = pd.read_csv('output/marsili_et_al_score.csv', index_col=0)
+    df2 = pd.read_csv('output/mottahedin_et_al_score.csv', index_col=0)
+
+    w = 0.1
+    idx = np.arange(len(df1.columns))
+    func = lambda x, pos: "" if np.isclose(x, 0) else x
+    ylabels = ['Year 0', 'Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Total']
+    col_titles = ['I1 - Max', 'I2 - Max', 'I3 - Min', 'I4 - Max', 'I5 - Max', 'I6 - Max', 'I7 - Min', 'I8 - Min',
+                  'I9 - Max']
+    for y in range(7):
+        for i in range(len(df1.columns)):
+            axes[y, i].bar(0, df1.iloc[y, i], width=w, label='Perelman et al', color=COLORS[3], edgecolor='k')
+            axes[y, i].bar(0 + w, df2.iloc[y, i], width=w, label='Mottahedin et al', color=COLORS[1], edgecolor='k')
+            axes[y, i].bar(0 + w * 2, df3.iloc[y, i], width=w, label='Marsili et al', color='tomato', edgecolor='k')
+            axes[y, i].set_xlim(-0.3, 0.45)
+            axes[y, i].set_xticks([])
+            ymin, ymax = axes[y, i].get_ylim()
+            axes[y, i].set_ylim(ymin, 1.2 * max(df1.iloc[y, i], df2.iloc[y, i], df3.iloc[y, i]))
+            axes[y, i].tick_params(axis='y', which='major', pad=0)  # move the tick labels
+
+            axes[y, i].tick_params(axis="y", direction="in", pad=-6, labelsize=9)
+            for tick in axes[y, i].yaxis.get_majorticklabels():
+                tick.set_horizontalalignment("left")
+
+            axes[y, i].xaxis.set_major_formatter(mtick.FuncFormatter(func))
+            axes[y, i].yaxis.set_major_formatter(mtick.FuncFormatter(func))
+
+            if i in [6, 7]:
+                axes[y, i].yaxis.set_major_formatter(lambda x, pos: "" if np.isclose(x, 0) else f'{x:.0f}')
+
+        axes[y, 0].set_ylabel(ylabels[y], fontsize=11)
+
+    axes[0, 8].hlines(y=0, xmin=-0.3, xmax=0.5, colors='k', linewidth=0.5)
+
+    for ax, col in zip(axes[0], col_titles):
+        ax.set_title(col, fontsize=11)
+
+    lines, lab = axes[0, 0].get_legend_handles_labels()
+    legend = fig.legend(lines, lab, loc=(0.08, 0.015), ncol=3, alignment='left',
+                        columnspacing=0.8, handletextpad=0.25, facecolor='white', fontsize=11)
+
+    plt.subplots_adjust(wspace=0, hspace=0, top=0.94, bottom=0.08, left=0.08, right=0.96)
 
 
 def get_valve_control(net: wntr.network.WaterNetworkModel, valve_name: str):
@@ -537,9 +586,8 @@ if __name__ == "__main__":
     percentage_pareto_plot()  # Figure 4
 
     metrics_by_year('output/8_final_networks_adjusted_new_controls/score.csv')  # Figure 5
-    
-    compare_two_solutions('output/7_final_networks_post_controls/score.csv',
-                          'output/marsili_et_al_score.csv')  # Figure 6
+
+    compare_three_teams()  # Figure 6
 
     plot_leaks(all_networks, leaks_summary_path='resources/all_leaks_summary.csv')  # Figure 7
 
@@ -549,7 +597,7 @@ if __name__ == "__main__":
     plot_evaluations_per_pipe()  # Figure 9
     plot_iterations('output/all_iter.csv')  # Figure 10
 
-    tank_volume()  # Figure S2
+    tank_volume()  # Figure S9
 
     # Figures S3-S8
     for _ in range(6):
